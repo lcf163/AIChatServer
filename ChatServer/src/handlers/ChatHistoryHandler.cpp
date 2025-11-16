@@ -1,0 +1,85 @@
+#include "handlers/ChatHistoryHandler.h"
+
+void ChatHistoryHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
+{
+    try
+    {
+        auto session = server_->getSessionManager()->getSession(req, resp);
+        LOG_INFO << "session->getValue(\"isLoggedIn\") = " << session->getValue("isLoggedIn");
+        if (session->getValue("isLoggedIn") != "true")
+        {
+
+            json errorResp;
+            errorResp["status"] = "error";
+            errorResp["message"] = "Unauthorized";
+            std::string errorBody = errorResp.dump(4);
+
+            server_->packageResp(req.getVersion(), http::HttpResponse::k401Unauthorized,
+                "Unauthorized", true, "application/json", errorBody.size(),
+                errorBody, resp);
+            return;
+        }
+
+        int userId = std::stoi(session->getValue("userId"));
+        std::string username = session->getValue("username");
+
+        std::string sessionId;
+        auto body = req.getBody();
+        if (!body.empty()) {
+            auto j = json::parse(body);
+            if (j.contains("sessionId")) sessionId = j["sessionId"];
+        }
+        
+        json historyArray = json::array();
+
+        // 直接从数据库查询历史记录
+        try {
+            // std::string sql = std::string("SELECT is_user, content FROM chat_message WHERE user_id = ") 
+            //     + std::to_string(userId) + " AND session_id = '" + sessionId + "' ORDER BY ts ASC, id ASC";
+            std::string sql = "SELECT is_user, content FROM chat_message "
+                    "WHERE user_id = " + std::to_string(userId) + 
+                    " AND session_id = '" + sessionId + "' "
+                    "ORDER BY ts ASC, id ASC";
+
+            sql::ResultSet* result = server_->mysqlUtil_.executeQuery(sql);
+            
+            if (result) {
+                while (result->next()) {
+                    json msgJson;
+                    msgJson["is_user"] = (result->getInt("is_user") == 1);
+                    msgJson["content"] = result->getString("content");
+                    historyArray.push_back(msgJson);
+                }
+                delete result;
+                result = nullptr;
+                std::cout << "Found " << historyArray.size() << " messages for session " << sessionId << std::endl;
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Failed to query message history: " << e.what() << std::endl;
+        }
+
+        json successResp;
+        successResp["success"] = true;
+        successResp["history"] = historyArray;
+        std::string successBody = successResp.dump(4);
+
+        resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
+        resp->setCloseConnection(false);
+        resp->setContentType("application/json");
+        resp->setContentLength(successBody.size());
+        resp->setBody(successBody);
+        return;
+    }
+    catch (const std::exception& e)
+    {
+        json failureResp;
+        failureResp["status"] = "error";
+        failureResp["message"] = e.what();
+        std::string failureBody = failureResp.dump(4);
+        resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
+        resp->setCloseConnection(true);
+        resp->setContentType("application/json");
+        resp->setContentLength(failureBody.size());
+        resp->setBody(failureBody);
+    }
+}

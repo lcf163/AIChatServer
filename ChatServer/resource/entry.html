@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI助手</title>
+<style>
+    :root {
+        --bg: #F8FAFC;
+        --surface: #FFFFFF;
+        --text: #111827;
+        --text-secondary: #6B7280;
+        --border: #E5E7EB;
+        --accent: #3B82F6;
+        --accent-hover: #2563EB;
+        --ring: rgba(59,130,246,0.35);
+        --shadow: rgba(17,24,39,0.06);
+    }
+    body {
+        font-family: "Microsoft YaHei", Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background-color: var(--bg);
+        color: var(--text);
+    }
+    h1.title {
+        font-size: 36px;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 30px;
+        color: var(--text);
+    }
+    .container {
+        width: 360px;
+        padding: 25px;
+        background: var(--surface);
+        border-radius: 15px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+        box-sizing: border-box;
+        text-align: center;
+        transition: box-shadow 0.2s ease;
+    }
+    .container:hover { box-shadow: 0 12px 25px rgba(0,0,0,0.12); }
+    h2 { font-size: 24px; margin-bottom: 20px; color: var(--text); }
+    .form-group { margin-bottom: 18px; text-align: left; }
+    .form-group label { display: block; font-size: 14px; color: var(--text-secondary); margin-bottom: 5px; }
+    .form-group input {
+        width: calc(100% - 20px);
+        padding: 10px;
+        font-size: 14px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        outline: none;
+        transition: border-color .2s ease, box-shadow .2s ease;
+    }
+    .form-group input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--ring);
+        background: var(--surface);
+    }
+    .btn {
+        width: 100%;
+        padding: 12px;
+        font-size: 16px;
+        background-color: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: background .2s ease, transform .2s ease;
+    }
+    .btn:hover { background-color: var(--accent-hover); transform: scale(1.02); }
+    .switch { margin-top: 15px; font-size: 14px; color: var(--text-secondary); }
+    .switch a { color: var(--accent); text-decoration: none; cursor: pointer; }
+    .switch a:hover { text-decoration: underline; }
+    #register-container { display: none; }
+    #success-alert {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--accent);
+        color: #fff;
+        padding: 12px 25px;
+        border-radius: 10px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        display: none;
+        z-index: 1000;
+        font-weight: bold;
+    }
+</style>
+</head>
+<body>
+<div id="success-alert">提示信息</div>
+
+<div>
+    <h1 class="title">AI助手</h1>
+
+    <!-- 登录 -->
+    <div class="container" id="login-container">
+        <h2>登录</h2>
+        <form id="login-form">
+            <div class="form-group">
+                <label for="login-username">用户名</label>
+                <input type="text" id="login-username" placeholder="请输入用户名" required>
+            </div>
+            <div class="form-group">
+                <label for="login-password">密码</label>
+                <input type="password" id="login-password" placeholder="请输入密码" required>
+            </div>
+            <button type="submit" class="btn">登录</button>
+        </form>
+        <div class="switch">
+            没有账号？<a onclick="showRegister()">去注册账号</a>
+        </div>
+    </div>
+
+    <!-- 注册 -->
+    <div class="container" id="register-container">
+        <h2>注册</h2>
+        <form id="register-form">
+            <div class="form-group">
+                <label for="register-username">用户名</label>
+                <input type="text" id="register-username" placeholder="请输入用户名" required>
+            </div>
+            <div class="form-group">
+                <label for="register-password">密码</label>
+                <input type="password" id="register-password" placeholder="请输入密码" required>
+            </div>
+            <button type="submit" class="btn">注册</button>
+        </form>
+        <div class="switch">
+            已有账号？<a onclick="showLogin()">返回登录</a>
+        </div>
+    </div>
+</div>
+
+<script>
+function showAlert(message){
+    const alertBox = document.getElementById('success-alert');
+    alertBox.textContent = message;
+    alertBox.style.display = 'block';
+    setTimeout(()=>{alertBox.style.display='none';},1000);
+}
+function showRegister(){ document.getElementById('login-container').style.display='none'; document.getElementById('register-container').style.display='block'; }
+function showLogin(){ document.getElementById('register-container').style.display='none'; document.getElementById('login-container').style.display='block'; }
+
+// 登录
+document.getElementById('login-form').addEventListener('submit', function(e){
+    e.preventDefault();
+    const username=document.getElementById('login-username').value;
+    const password=document.getElementById('login-password').value;
+
+    fetch('/login',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({username,password})
+    }).then(response=>{
+        if(response.status===403){ showAlert('账号已在其他地方登录！'); throw new Error('已在其他地方登录'); }
+        const contentType = response.headers.get('content-type');
+        if(response.status===200){
+            if(contentType && contentType.includes('application/json')) return response.json();
+            else throw new Error('返回格式错误');
+        }else if(response.status===401){ showAlert('账号或密码错误！'); throw new Error('认证失败'); }
+        else throw new Error('请求失败');
+    }).then(data=>{
+        if(data && data.userId){ sessionStorage.setItem('userId', data.userId); showAlert('登录成功！'); window.location.href='/menu'; }
+        else throw new Error('无效的响应数据');
+    }).catch(error=>{
+        console.error('Error:',error);
+        if(!error.message.includes('已在其他地方登录')&&!error.message.includes('认证失败')) showAlert('操作失败，请重试');
+    });
+});
+
+// 注册
+document.getElementById('register-form').addEventListener('submit', function(e){
+    e.preventDefault();
+    const username=document.getElementById('register-username').value;
+    const password=document.getElementById('register-password').value;
+
+    fetch('/register',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({username,password})
+    }).then(response=>{
+        if(response.status===200){
+            showAlert('注册成功！');
+            document.getElementById('login-username').value=username;
+            document.getElementById('login-password').value=password;
+            setTimeout(showLogin,1000);
+        }else if(response.status===409){ alert('用户名已被注册，请重新输入！'); }
+    }).catch(error=>console.error('注册错误:',error));
+});
+</script>
+</body>
+</html>

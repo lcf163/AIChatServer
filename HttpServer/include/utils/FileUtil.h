@@ -27,7 +27,7 @@ public:
     void resetDefaultFile()
     {
         file_.close();
-        file_.open("/AIApps/ChatServer/resource/NotFound.html", std::ios::binary);
+        file_.open("/ChatServer/resource/NotFound.html", std::ios::binary);
     }
 
     uint64_t size()

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>404 Not Found</title>
+<style>
+    :root {
+        --bg: #F8FAFC;
+        --surface: #FFFFFF;
+        --text: #111827;
+        --text-secondary: #6B7280;
+        --border: #E5E7EB;
+        --accent: #3B82F6;
+        --accent-hover: #2563EB;
+        --shadow: rgba(17,24,39,0.06);
+    }
+    body {
+        margin: 0;
+        padding: 0;
+        font-family: "Microsoft YaHei", Arial, sans-serif;
+        background-color: var(--bg);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        color: var(--text);
+    }
+    .container {
+        text-align: center;
+        padding: 30px 40px;
+        background: var(--surface);
+        border-radius: 15px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+        border: 1px solid var(--border);
+    }
+    h1 { font-size: 72px; margin: 0; color: var(--text); }
+    p { font-size: 20px; margin: 20px 0; color: var(--text-secondary); }
+    .btn {
+        display: inline-block;
+        padding: 12px 25px;
+        font-size: 16px;
+        background-color: var(--accent);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        font-weight: bold;
+        text-decoration: none;
+        transition: background .2s ease, transform .2s ease;
+    }
+    .btn:hover { background-color: var(--accent-hover); transform: scale(1.02); }
+</style>
+</head>
+<body>
+    <div class="container">
+        <h1>404</h1>
+        <p>抱歉，您访问的页面不存在！</p>
+        <a href="/menu" class="btn">返回首页</a>
+    </div>
+</body>
+</html>

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>欢迎来到AI助手界面</title>
+    <style>
+        
+        body {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+            color: #333;
+            overflow: hidden;
+            background: #ffffff;
+        }
+
+
+        #menu-container {
+            display: block;
+            text-align: center;
+            padding: 60px 20px;
+            animation: fadeIn 1s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h1 {
+            font-size: 2.8em;
+            margin-bottom: 30px;
+            color: #1890ff;
+            font-weight: 600;
+        }
+
+        .menu-option {
+            margin: 15px 0;
+            font-size: 1.6em;
+            padding: 12px 25px;
+            border-radius: 10px;
+            display: inline-block;
+            background: #ffffff;
+            border: 1px solid #d9d9d9;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+
+        .menu-option:hover {
+            background: #e6f7ff;
+            color: #1890ff;
+            border-color: #1890ff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(24, 144, 255, 0.2);
+        }
+
+        .menu-border {
+            margin: 20px auto;
+            width: 85%;
+            height: 1px;
+            background: #e0e0e0;
+        }
+    </style>
+</head>
+
+<body>
+    
+    
+    <div id="menu-container">
+        <h1>✨ 欢迎来到 AI 助手 ✨</h1>
+        <div class="menu-border"></div>
+        <div class="menu-option" id="chat-service">[1] 进入 AI 聊天助手</div>
+        <div class="menu-option" id="logout">[0] 退出登录</div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const menuContainer = document.getElementById('menu-container');
+            menuContainer.style.display = 'block';
+        });
+
+        // 进入AI服务
+        function loadService(path, errorMsg) {
+            fetch(path, { method: 'GET', headers: { 'Accept': 'text/html' } })
+                .then(res => res.text())
+                .then(html => { document.open(); document.write(html); document.close(); })
+                .catch(() => alert(errorMsg));
+        }
+
+        document.getElementById('chat-service').addEventListener('click', () => loadService('/chat', '进入AI聊天服务异常！'));
+        document.getElementById('logout').addEventListener('click', () => {
+            const userId = sessionStorage.getItem('userId');
+            fetch('/user/logout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: userId, type: 'manual', gameType: 0 })
+            })
+                .then(res => {
+                    if (!res.ok) throw new Error('Logout failed');
+                    return fetch('/', { method: 'GET', headers: { 'Accept': 'text/html' } });
+                })
+                .then(res => res.text())
+                .then(html => {
+                    sessionStorage.clear();
+                    document.open();
+                    document.write(html);
+                    document.close();
+                })
+                .catch(() => alert('退出登录失败！'));
+        });
+
+        // 页面刷新/关闭时自动登出
+        window.addEventListener('beforeunload', function () {
+            const userId = sessionStorage.getItem('userId');
+            if (userId) {
+                const data = new Blob([JSON.stringify({ userId: userId, type: 'refresh', gameType: 0 })],
+                    { type: 'application/json' });
+                navigator.sendBeacon('/user/logout', data);
+            }
+        });
+
+        // 页面加载时用户检查
+        window.addEventListener('load', function () {
+            const userId = sessionStorage.getItem('userId');
+            if (!userId) {
+                window.location.href = '/entry';
+            }
+        });
+    </script>
+</body>
+</html>
