@@ -24,26 +24,23 @@ DbConnection::DbConnection(const std::string& host,
         if (conn_) 
         {
             conn_->setSchema(database_);
-            
+
             // // 设置连接属性
             // conn_->setClientOption("OPT_RECONNECT", "true");
             // conn_->setClientOption("OPT_CONNECT_TIMEOUT", "10");
-            // conn_->setClientOption("multi_statements", "false");
-                        
-            // 设置连接属性（使用现代选项替代已弃用的选项）
-            try {
-                conn_->setClientOption("OPT_CONNECT_TIMEOUT", "10");
-                conn_->setClientOption("OPT_READ_TIMEOUT", "30");
-                conn_->setClientOption("OPT_WRITE_TIMEOUT", "30");
-                conn_->setClientOption("multi_statements", "false");
-                conn_->setClientOption("charsetName", "utf8mb4");
-            } catch (const sql::SQLException& e) {
-                LOG_WARN << "Some connection options failed: " << e.what();
-            }
+            // conn_->setClientOption("multi_statements", "false");        
             
-            // 设置字符集
+            // 设置连接属性 (移除已废弃的 OPT_RECONNECT)
+            conn_->setClientOption("OPT_CONNECT_TIMEOUT", "10");
+            conn_->setClientOption("OPT_READ_TIMEOUT", "30");
+            conn_->setClientOption("OPT_WRITE_TIMEOUT", "30");
+            conn_->setClientOption("multi_statements", "false");            
+            
+            // 设置字符集和会话参数
             std::unique_ptr<sql::Statement> stmt(conn_->createStatement());
             stmt->execute("SET NAMES utf8mb4");
+            stmt->execute("SET SESSION wait_timeout = 28800");
+            stmt->execute("SET SESSION interactive_timeout = 28800");
             
             LOG_INFO << "Database connection established";
         }
@@ -72,27 +69,33 @@ bool DbConnection::ping()
 {
     try 
     {
-        // // 不使用 getStmt，直接创建新的语句
-        // std::unique_ptr<sql::Statement> stmt(conn_->createStatement());
-        // std::unique_ptr<sql::ResultSet> rs(stmt->executeQuery("SELECT 1"));
-        // return true;
-
+        // 先检查连接状态
         if (!conn_ || !conn_->isValid()) {
             return false;
         }
-        
-        // 使用简单的ping查询
+
+        // 执行简单查询来测试连接
         std::unique_ptr<sql::Statement> stmt(conn_->createStatement());
         std::unique_ptr<sql::ResultSet> rs(stmt->executeQuery("SELECT 1"));
-        return rs && rs->next();
-    }
+        
+        if (rs && rs->next()) {
+            return true;
+        }
+
+        return false;
+    } 
     catch (const sql::SQLException& e) 
     {
-        LOG_ERROR << "Ping failed: " << e.what();
+        LOG_WARN << "Ping failed (SQL error): " << e.what() 
+                 << " (error code: " << e.getErrorCode() << ")";
         return false;
     }
     catch (const std::exception& e) {
-        LOG_ERROR << "Ping failed with exception: " << e.what();
+        LOG_WARN << "Ping failed (exception): " << e.what();
+        return false;
+    }
+    catch (...) {
+        LOG_WARN << "Ping failed (unknown error)";
         return false;
     }
 }
@@ -129,8 +132,14 @@ void DbConnection::reconnect()
     } 
     catch (const sql::SQLException& e) 
     {
+        LOG_ERROR << "Reconnect failed: " << e.what() 
+                  << " (error code: " << e.getErrorCode() << ")";
+        throw DbException(std::string("Reconnect failed: ") + e.what());
+    }
+    catch (const std::exception& e) 
+    {
         LOG_ERROR << "Reconnect failed: " << e.what();
-        throw DbException(e.what());
+        throw DbException(std::string("Reconnect failed: ") + e.what());
     }
 }
 
