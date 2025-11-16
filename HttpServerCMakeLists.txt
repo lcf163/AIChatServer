@@ -1,0 +1,49 @@
+cmake_minimum_required(VERSION 3.10)
+project(http_server)
+
+# 设置 C++ 标准
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# 添加头文件路径
+include_directories(
+    ${PROJECT_SOURCE_DIR}/HttpServer/include
+)
+
+# 查找必要的库
+find_library(MYSQLCPPCONN_LIBRARY
+    NAMES mysqlcppconn mysqlcppconn8
+    PATHS /usr/lib /usr/lib64 /usr/local/lib
+)
+
+# 添加 HttpServer 源文件
+file(GLOB_RECURSE HTTP_SERVER_SRC
+    "${PROJECT_SOURCE_DIR}/HttpServer/src/*.cpp"
+)
+
+# 示例程序源文件
+set(HTTP_SERVER_DEMO_SRC "${PROJECT_SOURCE_DIR}/HttpServer/examples/http_server_demo.cc")
+
+# 添加可执行文件
+add_executable(http_server
+    ${HTTP_SERVER_SRC}
+    ${HTTP_SERVER_DEMO_SRC}
+)
+
+# 链接库
+target_link_libraries(http_server
+    pthread
+    muduo_net
+    muduo_base
+    mysqlcppconn
+    mysqlclient
+    ssl
+    crypto
+)
+
+# 如果库不在默认路径，添加链接目录
+link_directories(/usr/local/lib)
+
+# 打印调试信息
+message(STATUS "HTTP Server sources: ${HTTP_SERVER_SRC}")
+message(STATUS "HTTP Server Demo source file: ${HTTP_SERVER_DEMO_SRC}")
