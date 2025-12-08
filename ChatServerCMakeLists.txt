@@ -5,9 +5,15 @@ project(chat_server)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 查找 OpenSSL 和 CURL
+# 查找依赖包
 find_package(OpenSSL REQUIRED)
 find_package(CURL REQUIRED)
+
+# 查找必要的库
+find_library(MYSQLCPPCONN_LIBRARY
+    NAMES mysqlcppconn mysqlcppconn8
+    PATHS /usr/lib /usr/lib64 /usr/local/lib
+)
 
 # 添加头文件路径
 include_directories(
@@ -19,12 +25,6 @@ include_directories(
     /usr/include/mysql
     ${OPENSSL_INCLUDE_DIR}
     ${CURL_INCLUDE_DIRS}
-)
-
-# 查找必要的库
-find_library(MYSQLCPPCONN_LIBRARY
-    NAMES mysqlcppconn mysqlcppconn8
-    PATHS /usr/lib /usr/lib64 /usr/local/lib
 )
 
 # 添加源文件
@@ -62,8 +62,3 @@ target_link_libraries(chat_server
 
 # 如果库不在默认路径，添加链接目录
 link_directories(/usr/local/lib)
-
-# 打印调试信息
-message(STATUS "Main source file: ${MAIN_SRC}")
-message(STATUS "HTTP Server sources: ${HTTP_SERVER_SRC}")
-message(STATUS "AIChat Server sources: ${AICHAT_SERVER_SRC}")

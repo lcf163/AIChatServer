@@ -300,6 +300,88 @@
         const syncBtn = document.getElementById('sync-history-btn');
         const modelTypeSelect = document.getElementById('modelType');
         const newChatBtn = document.getElementById('newChatBtn');
+        
+        // Server-Sent Events source
+        let sseSource = null; 
+        let currentSSESessionId = null;
+        
+        // 初始化SSE连接
+        function initSSE(sessionId) {
+            // 如果已有SSE连接且是同一个会话，则不需要重新连接
+            if (sseSource && currentSSESessionId === sessionId) {
+                return;
+            }
+            
+            // 关闭现有的SSE连接
+            if (sseSource) {
+                sseSource.close();
+            }
+            
+            currentSSESessionId = sessionId;
+            const sseUrl = '/chat/stream?sessionId=' + encodeURIComponent(sessionId);
+            sseSource = new EventSource(sseUrl);
+            
+            sseSource.onopen = function(event) {
+                console.log('SSE连接已建立，会话ID:', sessionId);
+            };
+            
+            sseSource.addEventListener('result', function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleAIResult(sessionId, data.result);
+                } catch (e) {
+                    console.error('处理SSE消息时出错:', e);
+                }
+            });
+            
+            sseSource.addEventListener('connected', function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('SSE已连接到会话:', data.sessionId);
+                } catch (e) {
+                    console.error('处理SSE连接消息时出错:', e);
+                }
+            });
+            
+            sseSource.addEventListener('end', function(event) {
+                console.log('SSE连接结束');
+                if (sseSource) {
+                    sseSource.close();
+                    sseSource = null;
+                    currentSSESessionId = null;
+                }
+            });
+            
+            sseSource.addEventListener('timeout', function(event) {
+                console.log('SSE连接超时');
+                appendMessage('assistant', '[错误] AI处理超时，请稍后重试');
+                if (sseSource) {
+                    sseSource.close();
+                    sseSource = null;
+                    currentSSESessionId = null;
+                }
+            });
+            
+            sseSource.onerror = function(event) {
+                console.error('SSE错误:', event);
+                appendMessage('assistant', '[错误] 连接异常，请稍后重试');
+                if (sseSource) {
+                    sseSource.close();
+                    sseSource = null;
+                    currentSSESessionId = null;
+                }
+            };
+        }
+        
+        // 处理AI结果
+        function handleAIResult(sessionId, result) {
+            if (sessionId === currentSessionId) {
+                appendMessage('assistant', result);
+                if (sessions[sessionId]) {
+                    sessions[sessionId].messages.push({ role: 'assistant', content: result });
+                }
+            }
+        }
 
         async function playTTS(text) {
             try {
@@ -373,17 +455,20 @@
                     const data = await response.json();
                     if (data.success) {
                         const sessionId = String(data.sessionId);
+                        
+                        // 初始化SSE连接
+                        initSSE(sessionId);
+                        
+                        // 更新当前会话
                         sessions[sessionId] = {
                             name: '新会话',
                             messages: [
-                                { role: 'user', content: question },
-                                { role: 'assistant', content: data.Information }
+                                { role: 'user', content: question }
                             ]
                         };
                         currentSessionId = sessionId;
                         tempSession = false;
                         renderSessionList();
-                        appendMessage('assistant', data.Information);
                     } else {
                         appendMessage('assistant', '[错误] ' + (data.message || '未知错误'));
                     }
@@ -401,8 +486,8 @@
                     });
                     const data = await response.json();
                     if (data.success) {
-                        appendMessage('assistant', data.Information);
-                        sessions[currentSessionId].messages.push({ role: 'assistant', content: data.Information });
+                        // 初始化SSE连接以接收回复
+                        initSSE(currentSessionId);
                     } else {
                         appendMessage('assistant', '[错误] ' + (data.message || '未知错误'));
                     }

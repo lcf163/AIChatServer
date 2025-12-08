@@ -3,17 +3,18 @@
 #include "ChatServer.h"
 #include "http/HttpRequest.h"
 #include "http/HttpResponse.h"
-#include "utils/JsonUtil.h"
-#include "utils/MysqlUtil.h"
 #include "router/RouterHandler.h"
+#include "utils/JsonUtil.h"
+#include <unordered_map>
+#include <mutex>
+#include <memory>
 
-class ChatSendHandler : public http::router::RouterHandler
+class SSEChatHandler : public http::router::RouterHandler
 {
 public:
-	ChatSendHandler(ChatServer* server) :server_(server) {}
+	SSEChatHandler(ChatServer* server) : server_(server) {}
 	void handle(const http::HttpRequest& req, http::HttpResponse* resp) override;
 
 private:
 	ChatServer* server_;
-	http::MysqlUtil mysqlUtil_;
 };

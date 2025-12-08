@@ -1,19 +1,20 @@
 #pragma once
 
-#include "router/RouterHandler.h"
-#include "utils/MysqlUtil.h"
-
-#include "AIUtil/AISessionIdGenerator.h"
 #include "ChatServer.h"
+#include "http/HttpRequest.h"
+#include "http/HttpResponse.h"
+#include "utils/JsonUtil.h"
+#include "utils/MysqlUtil.h"
+#include "router/RouterHandler.h"
+#include "AIUtil/AISessionIdGenerator.h"
 
 class ChatCreateAndSendHandler : public http::router::RouterHandler
 {
 public:
-    explicit ChatCreateAndSendHandler(ChatServer* server) : server_(server) {}
-
-    void handle(const http::HttpRequest& req, http::HttpResponse* resp) override;
+	ChatCreateAndSendHandler(ChatServer* server) :server_(server) {}
+	void handle(const http::HttpRequest& req, http::HttpResponse* resp) override;
 
 private:
-    ChatServer* server_;
-    http::MysqlUtil mysqlUtil_;
+	ChatServer* server_;
+	http::MysqlUtil mysqlUtil_;
 };

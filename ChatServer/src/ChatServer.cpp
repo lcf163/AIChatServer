@@ -11,6 +11,8 @@
 #include "handlers/AIMenuHandler.h"
 #include "handlers/ChatHistoryHandler.h"
 #include "handlers/ChatCreateAndSendHandler.h"
+#include "handlers/ChatGetResultHandler.h"
+#include "handlers/SSEChatHandler.h"
 #include "handlers/ChatSessionsHandler.h"
 #include "handlers/ChatSpeechHandler.h"
 #include "ChatServer.h"
@@ -39,6 +41,9 @@ void ChatServer::initialize() {
 
     // 初始化路由接口，请求通过 Handler 做相应业务处理
     initializeRouter();
+
+    // 初始化业务线程池，用于处理AI请求
+    businessThreadPool_ = std::make_shared<ThreadPool>(4);
 
     std::cout << "ChatServer initialize success ! " << std::endl;
 }
@@ -159,6 +164,8 @@ void ChatServer::initializeRouter() {
     httpServer_.Get("/chat/sessions", std::make_shared<ChatSessionsHandler>(this));
     httpServer_.Post("/chat/history", std::make_shared<ChatHistoryHandler>(this));
     httpServer_.Post("/chat/send-new-session", std::make_shared<ChatCreateAndSendHandler>(this));
+    // httpServer_.Post("/chat/get-result", std::make_shared<ChatGetResultHandler>(this)); // 已废弃，改用SSE
+    httpServer_.Get("/chat/stream", std::make_shared<SSEChatHandler>(this));
  
     httpServer_.Get("/menu", std::make_shared<AIMenuHandler>(this));
 }
@@ -172,44 +179,20 @@ void ChatServer::initializeSession() {
 }
 
 void ChatServer::initializeMiddleware() {
+    // 添加 CORS 中间件
     auto corsMiddleware = std::make_shared<http::middleware::CorsMiddleware>();
-
     httpServer_.addMiddleware(corsMiddleware);
 }
 
-void ChatServer::packageResp(const std::string& version,
-    http::HttpResponse::HttpStatusCode statusCode,
-    const std::string& statusMsg,
-    bool close,
-    const std::string& contentType,
-    int contentLen,
-    const std::string& body,
-    http::HttpResponse* resp)
-{
-    if (resp == nullptr)
-    {
-        LOG_ERROR << "Response pointer is null";
-        return;
-    }
+void ChatServer::packageResp(const std::string& version, http::HttpResponse::HttpStatusCode statusCode,
+	const std::string& statusMsg, bool close, const std::string& contentType,
+	int contentLen, const std::string& body, http::HttpResponse* resp) {
 
-    try
-    {
-        resp->setVersion(version);
-        resp->setStatusCode(statusCode);
-        resp->setStatusMessage(statusMsg);
-        resp->setCloseConnection(close);
-        resp->setContentType(contentType);
-        resp->setContentLength(contentLen);
-        resp->setBody(body);
-
-        LOG_INFO << "Response packaged successfully";
-    }
-    catch (const std::exception& e)
-    {
-        LOG_ERROR << "Error in packageResp: " << e.what();
-
-        resp->setStatusCode(http::HttpResponse::k500InternalServerError);
-        resp->setStatusMessage("Internal Server Error");
-        resp->setCloseConnection(true);
-    }
+	resp->setStatusLine(version, statusCode, statusMsg);
+	resp->setCloseConnection(close);
+	resp->setContentType(contentType);
+	resp->setContentLength(contentLen);
+	resp->setBody(body);
 }
+
+void ChatServer::initChatMessage() {}

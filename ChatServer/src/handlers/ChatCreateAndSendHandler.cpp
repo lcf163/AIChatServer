@@ -66,12 +66,28 @@ void ChatCreateAndSendHandler::handle(const http::HttpRequest& req, http::HttpRe
             AIHelperPtr= userSessions[sessionId];
         }
 
-        std::string aiInformation=AIHelperPtr->chat(userId, username,sessionId, userQuestion, modelType);
+        // 使用线程池异步处理AI请求，真正避免阻塞IO线程
+        auto future = AIHelperPtr->chatAsync(server_->businessThreadPool_, userId, username, sessionId, userQuestion, modelType);
+        
+        // 在另一个线程中等待结果并处理
+        server_->businessThreadPool_->enqueue([this, sessionId, userId, future = std::move(future)]() mutable {
+            try {
+                std::string result = future.get();
+                // 通过WebSocket推送结果给客户端
+                std::lock_guard<std::mutex> lock(server_->mutexForChatResults);
+                server_->chatResults[sessionId] = result;
+                std::cout << "Stored result for session: " << sessionId << ", result length: " << result.length() << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "AI task failed for session " << sessionId << ": " << e.what() << std::endl;
+            }
+        });
+
+        // 立即返回 sessionId，前端需轮询结果
         json successResp;
         successResp["success"] = true;
-        successResp["Information"] = aiInformation;
+        successResp["message"] = "AI processing started";
         successResp["sessionId"] = sessionId;
-        
+
         std::string successBody = successResp.dump(4);
         resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
         resp->setCloseConnection(false);

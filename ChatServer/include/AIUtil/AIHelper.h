@@ -6,6 +6,8 @@
 #include <curl/curl.h>
 #include <iostream>
 #include <sstream>
+#include <functional>
+#include <future>
 
 #include "utils/JsonUtil.h"
 #include "utils/MysqlUtil.h"
@@ -13,6 +15,7 @@
 #include "AIFactory.h"
 #include "AIConfig.h"
 #include "AIToolRegistry.h"
+#include "ThreadPool.h"
 
 //封装curl访问模型
 class AIHelper {
@@ -31,6 +34,9 @@ public:
     // messages: [{"role":"system","content":"..."}, {"role":"user","content":"..."}]
     std::string chat(int userId, std::string userName, std::string sessionId, std::string userQuestion, std::string modelType);
 
+    // 异步发送聊天消息，返回future对象
+    std::future<std::string> chatAsync(std::shared_ptr<ThreadPool> pool, int userId, std::string userName, std::string sessionId, std::string userQuestion, std::string modelType);
+
     // 可选：发送自定义请求体
     json request(const json& payload);
 
@@ -45,6 +51,9 @@ private:
     json executeCurl(const json& payload);
     // curl 回调函数，把返回的数据写到 string buffer
     static size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp);
+
+    // 实际执行聊天逻辑的方法
+    std::string chatImpl(int userId, std::string userName, std::string sessionId, std::string userQuestion, std::string modelType);
 
 private:
     std::shared_ptr<AIStrategy> strategy;

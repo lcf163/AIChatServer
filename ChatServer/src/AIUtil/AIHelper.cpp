@@ -1,5 +1,7 @@
 #include <stdexcept>
 #include <chrono>
+#include <thread>
+#include <future>
 
 #include "AIUtil/AIHelper.h"
 #include "AIUtil/MQManager.h"
@@ -37,6 +39,19 @@ void AIHelper::restoreMessage(const std::string& userInput,long long ms) {
 
 // 发送聊天消息
 std::string AIHelper::chat(int userId,std::string userName, std::string sessionId, std::string userQuestion, std::string modelType) {
+    return chatImpl(userId, userName, sessionId, userQuestion, modelType);
+}
+
+// 异步发送聊天消息
+std::future<std::string> AIHelper::chatAsync(std::shared_ptr<ThreadPool> pool, int userId, std::string userName, std::string sessionId, std::string userQuestion, std::string modelType) {
+    // 使用线程池执行任务
+    return pool->enqueue([this, userId, userName, sessionId, userQuestion, modelType]() {
+        return chatImpl(userId, userName, sessionId, userQuestion, modelType);
+    });
+}
+
+// 实际执行聊天逻辑的方法
+std::string AIHelper::chatImpl(int userId,std::string userName, std::string sessionId, std::string userQuestion, std::string modelType) {
     // 设置策略
     setStrategy(StrategyFactory::instance().create(modelType));
     

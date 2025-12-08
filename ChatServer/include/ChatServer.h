@@ -20,6 +20,7 @@
 #include "AIUtil/AIHelper.h"
 #include "AIUtil/base64.h"
 #include "AIUtil/MQManager.h"
+#include "AIUtil/ThreadPool.h"
 
 class ChatLoginHandler;
 class ChatRegisterHandler;
@@ -31,6 +32,9 @@ class ChatSpeechHandler;
 class ChatSessionsHandler;
 class ChatHistoryHandler;
 class ChatCreateAndSendHandler;
+class ChatGetResultHandler;
+class SSEChatHandler;
+
 class AIMenuHandler;
 
 class ChatServer {
@@ -55,6 +59,8 @@ private:
 	friend class ChatHistoryHandler;
 	friend class ChatSessionsHandler;
 	friend class ChatCreateAndSendHandler;
+	friend class ChatGetResultHandler;
+	friend class SSEChatHandler;
 
 	friend class AIMenuHandler;
 
@@ -94,4 +100,13 @@ private:
 
 	std::unordered_map<int, std::vector<std::string>> sessionsIdsMap;
 	std::mutex mutexForSessionsId;
+	
+	// 添加业务线程池，用于处理AI请求
+	std::shared_ptr<ThreadPool> businessThreadPool_;
+	
+	// 存储聊天结果的容器
+	std::unordered_map<std::string, std::string> chatResults;
+	std::mutex mutexForChatResults;
+	
+private:
 };
