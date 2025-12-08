@@ -1,4 +1,5 @@
 #include "handlers/ChatHistoryHandler.h"
+#include <muduo/base/Logging.h>
 
 void ChatHistoryHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {
@@ -53,10 +54,10 @@ void ChatHistoryHandler::handle(const http::HttpRequest& req, http::HttpResponse
                 }
                 delete result;
                 result = nullptr;
-                std::cout << "Found " << historyArray.size() << " messages for session " << sessionId << std::endl;
+                LOG_INFO << "Found " << historyArray.size() << " messages for session " << sessionId;
             }
         } catch (const std::exception& e) {
-            std::cerr << "Failed to query message history: " << e.what() << std::endl;
+            LOG_ERROR << "Failed to query message history: " << e.what();
         }
 
         json successResp;

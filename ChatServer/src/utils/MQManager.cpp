@@ -1,5 +1,6 @@
 #include "utils/MQManager.h"
 #include "AIUtil/AIConfig.h"
+#include <muduo/base/Logging.h>
 
 // ------------------- MQManager -------------------
 MQManager::MQManager(size_t poolSize)
@@ -74,6 +75,6 @@ void RabbitMQThreadPool::worker(int id) {
         channel->BasicCancel(consumer_tag);
     }
     catch (const std::exception& e) {
-        std::cerr << "Thread " << id << " exception: " << e.what() << std::endl;
+        LOG_ERROR << "Thread " << id << " exception: " << e.what();
     }
 }

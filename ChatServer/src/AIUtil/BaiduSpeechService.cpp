@@ -1,8 +1,9 @@
 
+#include <muduo/base/Logging.h>
+#include <thread>
+
 #include "utils/JsonUtil.h"
 #include "AIUtil/BaiduSpeechService.h"
-#include <iostream>
-#include <thread>
 
 // 定义轮询参数常量
 static const int MAX_POLLING_LOOPS = 60;          // 最多轮询60次
@@ -114,10 +115,10 @@ std::string BaiduSpeechService::recognize(const std::string& speechData,
             }
         }
     } catch (...) {
-        std::cout << "Parse error in recognize response: " << result << std::endl;
+        LOG_ERROR << "Parse error in recognize response: " << result;
     }
 
-    std::cout << "Recognize failed, response: " << result << std::endl;
+    LOG_ERROR << "Recognize failed, response: " << result;
     return "";
 }
 

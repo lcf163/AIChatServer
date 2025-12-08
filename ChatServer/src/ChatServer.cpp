@@ -1,3 +1,5 @@
+#include <muduo/base/Logging.h>
+
 #include "http/HttpRequest.h"
 #include "http/HttpResponse.h"
 #include "http/HttpServer.h"
@@ -28,7 +30,7 @@ ChatServer::ChatServer(int port,
 }
 
 void ChatServer::initialize() {
-    std::cout << "ChatServer initialize start ! " << std::endl;
+    LOG_INFO << "ChatServer initialize start !";
     
     // 从配置中获取数据库信息
     const auto& dbConfig = AIConfig::getInstance().getDatabaseConfig();
@@ -48,18 +50,18 @@ void ChatServer::initialize() {
     // 初始化业务线程池，用于处理AI请求
     businessThreadPool_ = std::make_shared<ThreadPool>(4);
 
-    std::cout << "ChatServer initialize success ! " << std::endl;
+    LOG_INFO << "ChatServer initialize success !";
 }
 
 void ChatServer::loadSessionsFromDatabase() {
-    std::cout << "Loading sessions from database..." << std::endl;
+    LOG_INFO << "Loading sessions from database...";
     
     try {
         std::string sql = "SELECT user_id, session_id FROM chat_session ORDER BY user_id, created_at";
         sql::ResultSet* result = mysqlUtil_.executeQuery(sql);
         
         if (!result) {
-            std::cout << "No sessions found in database (first startup?)" << std::endl;
+            LOG_INFO << "No sessions found in database (first startup?)";
             return;
         }
 
@@ -81,13 +83,13 @@ void ChatServer::loadSessionsFromDatabase() {
         }
         
         delete result;
-        std::cout << "Loaded " << sessionCount << " sessions (messages will load on demand)" << std::endl;
+        LOG_INFO << "Loaded " << sessionCount << " sessions (messages will load on demand)";
     }
     catch (const std::exception& e) {
-        std::cerr << "Error loading sessions from database: " << e.what() << std::endl;
+        LOG_ERROR << "Error loading sessions from database: " << e.what();
     }
     catch (...) {
-        std::cerr << "Unknown error occurred while loading sessions from database" << std::endl;
+        LOG_ERROR << "Unknown error occurred while loading sessions from database";
     }
 }
 
@@ -136,25 +138,18 @@ std::shared_ptr<AIHelper> ChatServer::loadSessionOnDemand(int userId, const std:
         // 加载成功后，更新LRU缓存
         updateLRUCache(userId, sessionId);
         
-        std::cout << "Loaded " << messageCount << " messages for session " << sessionId << std::endl;
+        LOG_INFO << "Loaded " << messageCount << " messages for session " << sessionId;
         return helper;
         
     } catch (const std::exception& e) {
-        std::cerr << "Error loading session messages from database: " << e.what() << std::endl;
+        LOG_ERROR << "Error loading session messages from database: " << e.what();
         // 出错时仍创建一个空的AIHelper实例
         auto helper = std::make_shared<AIHelper>();
         userSessions[sessionId] = helper;
         updateLRUCache(userId, sessionId);
         return helper;
     }
-    catch (...) {
-        std::cerr << "Unknown error occurred while loading session messages from database" << std::endl;
-        // 出错时仍创建一个空的AIHelper实例
-        auto helper = std::make_shared<AIHelper>();
-        userSessions[sessionId] = helper;
-        updateLRUCache(userId, sessionId);
-        return helper;
-    }
+
 }
 
 void ChatServer::setThreadNum(int numThreads) {
@@ -231,8 +226,8 @@ void ChatServer::evictLRUCacheIfNeeded() {
             }
         }
         
-        std::cout << "LRU Cache Eviction: Removed session '" << sessionId 
-                  << "' for user " << userId << std::endl;
+        LOG_INFO << "LRU Cache Eviction: Removed session '" << sessionId 
+                 << "' for user " << userId;
     }
 }
 

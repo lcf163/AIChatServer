@@ -1,8 +1,9 @@
 #include "handlers/SSEChatHandler.h"
+#include <muduo/base/Logging.h>
+#include <muduo/net/Buffer.h>
 #include <sstream>
 #include <chrono>
 #include <thread>
-#include <muduo/net/Buffer.h>
 
 // 超时检查次数（每次0.5秒，60次共30秒）
 constexpr int SSE_TIMEOUT_CHECKS = 60;
@@ -129,9 +130,9 @@ bool SSEChatHandler::streamWriteCallback(muduo::net::TcpConnectionPtr conn, http
             if (--(it->second) <= 0) {
                 timeout = true;
                 timeoutCounters_.erase(it);
-                std::cout << "Timeout reached for session: " << sessionId << std::endl;
+                LOG_INFO << "Timeout reached for session: " << sessionId;
             } else {
-                // std::cout << "Remaining checks for session " << sessionId << ": " << it->second << std::endl;
+                // LOG_INFO << "Remaining checks for session " << sessionId << ": " << it->second;
             }
         } else {
             // 如果找不到计数器，也认为超时

@@ -1,7 +1,5 @@
-#include <stdexcept>
 #include <chrono>
-#include <thread>
-#include <future>
+#include <muduo/base/Logging.h>
 
 #include "utils/MQManager.h"
 #include "AIUtil/AIHelper.h"
@@ -155,7 +153,7 @@ json AIHelper::executeCurl(const json& payload) {
         throw std::runtime_error("Failed to initialize curl");
     }
 
-    std::cout << "AI API invoke " << strategy->getApiUrl().c_str() << ' ' << strategy->getApiKey() << std::endl;
+    LOG_INFO << "AI API invoke " << strategy->getApiUrl().c_str() << ' ' << strategy->getApiKey();
 
     std::string readBuffer;
     struct curl_slist* headers = nullptr;

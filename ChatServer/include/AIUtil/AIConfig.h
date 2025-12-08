@@ -12,6 +12,16 @@
 #include "utils/JsonUtil.h"  
 #include "AIToolRegistry.h"
 
+// 添加日志级别枚举
+enum class LogLevel {
+    TRACE,
+    DEBUG,
+    INFO,
+    WARN,
+    ERROR,
+    FATAL
+};
+
 // 添加语音服务提供商枚举
 enum class SpeechServiceProvider {
     BAIDU,
@@ -37,6 +47,11 @@ struct DatabaseConfig {
     std::string password;
     std::string database;
     int poolSize;
+};
+
+// 日志配置结构
+struct LogConfig {
+    LogLevel level;
 };
 
 // RabbitMQ配置结构
@@ -103,6 +118,7 @@ public:
 
     // 获取配置项
     const DatabaseConfig& getDatabaseConfig() const { return dbConfig_; }
+    const LogConfig& getLogConfig() const { return logConfig_; }
     const RabbitMQConfig& getRabbitMQConfig() const { return mqConfig_; }
     const ApiKeysConfig& getApiKeysConfig() const { return apiKeysConfig_; }
     const ModelConfig& getModelConfig() const { return modelConfig_; }
@@ -121,6 +137,7 @@ private:
 
     // 配置项
     DatabaseConfig dbConfig_;
+    LogConfig logConfig_;
     RabbitMQConfig mqConfig_;
     ApiKeysConfig apiKeysConfig_;
     ModelConfig modelConfig_;

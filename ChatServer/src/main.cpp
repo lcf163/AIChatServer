@@ -19,9 +19,10 @@ void executeMysql(const std::string sql_with_params) {
     // 解析SQL和参数
     size_t pos = sql_with_params.find("|~|");
     if (pos != std::string::npos) {
+        // 分离SQL语句和参数
         std::string sql = sql_with_params.substr(0, pos);
         std::string params_str = sql_with_params.substr(pos + 3);
-        
+
         // 分割参数
         std::vector<std::string> params;
         size_t start = 0;
@@ -31,7 +32,7 @@ void executeMysql(const std::string sql_with_params) {
             start = end + 3;
         }
         params.push_back(params_str.substr(start));
-        
+
         // 根据参数数量执行相应的executeUpdate
         try {
             switch (params.size()) {
@@ -59,20 +60,19 @@ void executeMysql(const std::string sql_with_params) {
                     break;
             }
         } catch (const std::exception& e) {
-            std::cerr << "Error executing SQL: " << e.what() << std::endl;
+            LOG_ERROR << "Error executing SQL: " << e.what();
         }
     } else {
         // 如果没有找到分隔符，则直接执行原始SQL（向后兼容）
         try {
             mysqlUtil_.executeUpdate(sql_with_params);
         } catch (const std::exception& e) {
-            std::cerr << "Error executing SQL: " << e.what() << std::endl;
+            LOG_ERROR << "Error executing SQL: " << e.what();
         }
     }
 }
 
 int main(int argc, char* argv[]) {
-	LOG_INFO << "pid = " << getpid();
 	std::string serverName = "ChatServer";
 	int port = 8080;
     int opt;
@@ -91,15 +91,42 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    muduo::Logger::setLogLevel(muduo::Logger::WARN);
-    
     // 加载配置文件
     AIConfig& config = AIConfig::getInstance();
     if (!config.loadFromFile("../ChatServer/resource/config.json")) {
-        std::cerr << "Failed to load config file!" << std::endl;
+        LOG_ERROR << "Failed to load config file!";
         return -1;
     }
     
+    // 根据配置设置日志级别
+    const auto& logConfig = config.getLogConfig();
+    switch (logConfig.level) {
+        case LogLevel::TRACE:
+            muduo::Logger::setLogLevel(muduo::Logger::TRACE);
+            break;
+        case LogLevel::DEBUG:
+            muduo::Logger::setLogLevel(muduo::Logger::DEBUG);
+            break;
+        case LogLevel::INFO:
+            muduo::Logger::setLogLevel(muduo::Logger::INFO);
+            break;
+        case LogLevel::WARN:
+            muduo::Logger::setLogLevel(muduo::Logger::WARN);
+            break;
+        case LogLevel::ERROR:
+            muduo::Logger::setLogLevel(muduo::Logger::ERROR);
+            break;
+        case LogLevel::FATAL:
+            muduo::Logger::setLogLevel(muduo::Logger::FATAL);
+            break;
+        default:
+            muduo::Logger::setLogLevel(muduo::Logger::WARN);
+            break;
+    }
+    
+    // 在设置日志级别后再打印进程ID
+    LOG_INFO << "pid = " << getpid();
+
     // 初始化 ChatServer
     ChatServer server(port, serverName);
     // server.setThreadNum(4);

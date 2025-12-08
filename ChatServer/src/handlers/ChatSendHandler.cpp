@@ -1,4 +1,5 @@
 #include "handlers/ChatSendHandler.h"
+#include <muduo/base/Logging.h>
 
 void ChatSendHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {
@@ -76,7 +77,7 @@ void ChatSendHandler::handle(const http::HttpRequest& req, http::HttpResponse* r
 				std::lock_guard<std::mutex> lock(server_->mutexForChatResults);
 				server_->chatResults[sessionId] = result;
 			} catch (const std::exception& e) {
-				std::cerr << "AI task failed for session " << sessionId << ": " << e.what() << std::endl;
+				LOG_ERROR << "AI task failed for session " << sessionId << ": " << e.what();
 			}
 		});
 

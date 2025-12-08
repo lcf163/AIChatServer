@@ -1,4 +1,5 @@
 #include "handlers/ChatSessionsHandler.h"
+#include <muduo/base/Logging.h>
 
 void ChatSessionsHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {
@@ -41,10 +42,10 @@ void ChatSessionsHandler::handle(const http::HttpRequest& req, http::HttpRespons
                 s["name"] = "会话 " + sid;
                 sessionArray.push_back(s);
             }
-            std::cout << "Found " << sessionsFromMemory.size() << " sessions in memory" << std::endl;
+            LOG_INFO << "Found " << sessionsFromMemory.size() << " sessions in memory";
         } else {
             // 如果内存中没有会话数据，从数据库查询
-            std::cout << "No sessions in memory, querying from database..." << std::endl;
+            LOG_INFO << "No sessions in memory, querying from database...";
             try {
                 std::string sql = "SELECT session_id, title, created_at, updated_at FROM chat_session WHERE user_id = ? ORDER BY updated_at DESC";
                 
@@ -65,10 +66,10 @@ void ChatSessionsHandler::handle(const http::HttpRequest& req, http::HttpRespons
                     }
                     delete result;
                     result = nullptr;
-                    std::cout << "Loaded " << sessionArray.size() << " sessions from database" << std::endl;
+                    LOG_INFO << "Loaded " << sessionArray.size() << " sessions from database";
                 }
             } catch (const std::exception& e) {
-                std::cerr << "Failed to query sessions from database: " << e.what() << std::endl;
+                LOG_ERROR << "Failed to query sessions from database: " << e.what();
             }
         }
 

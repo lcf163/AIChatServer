@@ -1,6 +1,11 @@
+#include <muduo/base/Logging.h>
+
 #include "AIUtil/AIConfig.h"
 
 AIConfig::AIConfig() : isLoaded_(false) {
+    // 设置默认日志级别为WARN
+    logConfig_.level = LogLevel::WARN;
+    
     // 工具已经在AIToolRegistry构造函数中注册
 }
 
@@ -12,7 +17,7 @@ AIConfig& AIConfig::getInstance() {
 bool AIConfig::loadFromFile(const std::string& path) {
     std::ifstream file(path);
     if (!file.is_open()) {
-        std::cerr << "Failed to open config file: " << path << std::endl;
+        LOG_ERROR << "Failed to open config file: " << path;
         return false;
     }
 
@@ -25,7 +30,7 @@ bool AIConfig::loadFromFile(const std::string& path) {
         if (config.contains("prompt_template") && config["prompt_template"].is_string()) {
             promptTemplate_ = config["prompt_template"];
         } else {
-            std::cerr << "Error: prompt_template not found in config file!" << std::endl;
+            LOG_ERROR << "Error: prompt_template not found in config file!";
             return false;
         }
 
@@ -134,11 +139,37 @@ bool AIConfig::loadFromFile(const std::string& path) {
                 }
             }
         }
+        
+        // 加载日志配置
+        if (config.contains("log")) {
+            auto logConfig = config["log"];
+            if (logConfig.contains("level")) {
+                std::string levelStr = logConfig["level"];
+                std::transform(levelStr.begin(), levelStr.end(), levelStr.begin(), ::toupper);
+                
+                if (levelStr == "TRACE") {
+                    logConfig_.level = LogLevel::TRACE;
+                } else if (levelStr == "DEBUG") {
+                    logConfig_.level = LogLevel::DEBUG;
+                } else if (levelStr == "INFO") {
+                    logConfig_.level = LogLevel::INFO;
+                } else if (levelStr == "WARN") {
+                    logConfig_.level = LogLevel::WARN;
+                } else if (levelStr == "ERROR") {
+                    logConfig_.level = LogLevel::ERROR;
+                } else if (levelStr == "FATAL") {
+                    logConfig_.level = LogLevel::FATAL;
+                } else {
+                    // 默认使用WARN级别
+                    logConfig_.level = LogLevel::WARN;
+                }
+            }
+        }
 
         isLoaded_ = true;
         return true;
     } catch (const std::exception& e) {
-        std::cerr << "Error parsing config file: " << e.what() << std::endl;
+        LOG_ERROR << "Error parsing config file: " << e.what();
         return false;
     }
 }
@@ -172,7 +203,7 @@ std::string AIConfig::buildPrompt(const std::string& userInput) const {
     
     // 检查promptTemplate_是否为空
     if (promptTemplate_.empty()) {
-        std::cerr << "Error: prompt_template is empty!" << std::endl;
+        LOG_ERROR << "Error: prompt_template is empty!";
         return "";
     }
     
