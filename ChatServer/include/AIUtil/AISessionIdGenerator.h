@@ -2,15 +2,15 @@
 
 #include <chrono>
 #include <random>
-#include <cstdlib>
-#include <ctime>
 #include <string>
+#include <memory>
 
 class AISessionIdGenerator {
 public:
-    AISessionIdGenerator() {
-        std::srand(static_cast<unsigned>(std::time(nullptr)));
-    }
+    AISessionIdGenerator();
     
     std::string generate();
+
+private:
+    std::unique_ptr<std::mt19937_64> generator_;
 };
