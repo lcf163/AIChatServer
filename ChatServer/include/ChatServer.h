@@ -4,6 +4,7 @@
 #include <memory>
 #include <tuple>
 #include <unordered_map>
+#include <list>
 #include <mutex>
 #include <cstdlib>
 #include <ctime>
@@ -46,7 +47,6 @@ public:
 	void start();
 
 	void setThreadNum(int numThreads);
-	void initChatMessage();
 
 	http::session::SessionManager* getSessionManager() const
 	{
@@ -91,6 +91,10 @@ private:
 		const std::string& statusMsg, bool close, const std::string& contentType,
 		int contentLen, const std::string& body, http::HttpResponse* resp);
 
+	// LRU Cache相关方法
+	void updateLRUCache(int userId, const std::string& sessionId);
+	void evictLRUCacheIfNeeded();
+
 	http::HttpServer httpServer_;
 
 	http::MysqlUtil mysqlUtil_;
@@ -110,4 +114,10 @@ private:
 	// 存储聊天结果的容器
 	std::unordered_map<std::string, std::string> chatResults;
 	std::mutex mutexForChatResults;
+	
+	// LRU Cache相关成员
+	std::list<std::pair<int, std::string>> lruCacheList_;
+	std::unordered_map<std::string, std::list<std::pair<int, std::string>>::iterator> lruCacheMap_;
+	std::mutex lruCacheMutex_;
+	static const size_t MAX_ACTIVE_SESSIONS = 1000;
 };

@@ -131,7 +131,7 @@ bool SSEChatHandler::streamWriteCallback(muduo::net::TcpConnectionPtr conn, http
                 timeoutCounters_.erase(it);
                 std::cout << "Timeout reached for session: " << sessionId << std::endl;
             } else {
-                std::cout << "Remaining checks for session " << sessionId << ": " << it->second << std::endl;
+                // std::cout << "Remaining checks for session " << sessionId << ": " << it->second << std::endl;
             }
         } else {
             // 如果找不到计数器，也认为超时

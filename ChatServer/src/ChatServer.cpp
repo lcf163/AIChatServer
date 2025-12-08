@@ -93,6 +93,8 @@ std::shared_ptr<AIHelper> ChatServer::loadSessionOnDemand(int userId, const std:
     auto& userSessions = chatInformation[userId];
     auto it = userSessions.find(sessionId);
     if (it != userSessions.end()) {
+        // 如果已存在，更新LRU缓存并返回
+        updateLRUCache(userId, sessionId);
         return it->second;
     }
     
@@ -128,6 +130,9 @@ std::shared_ptr<AIHelper> ChatServer::loadSessionOnDemand(int userId, const std:
         if (std::find(sessionList.begin(), sessionList.end(), sessionId) == sessionList.end()) {
             sessionList.push_back(sessionId);
         }
+        
+        // 加载成功后，更新LRU缓存
+        updateLRUCache(userId, sessionId);
         
         std::cout << "Loaded " << messageCount << " messages for session " << sessionId << std::endl;
         return helper;
@@ -178,6 +183,50 @@ void ChatServer::initializeSession() {
     loadSessionsFromDatabase();
 }
 
+void ChatServer::updateLRUCache(int userId, const std::string& sessionId) {
+    std::lock_guard<std::mutex> lock(lruCacheMutex_);
+    
+    // 如果会话已在LRU缓存中，先移除旧条目
+    auto it = lruCacheMap_.find(sessionId);
+    if (it != lruCacheMap_.end()) {
+        lruCacheList_.erase(it->second);
+        lruCacheMap_.erase(it);
+    }
+    
+    // 将新会话添加到LRU链表头部（表示最近使用）
+    lruCacheList_.emplace_front(userId, sessionId);
+    lruCacheMap_[sessionId] = lruCacheList_.begin();
+    
+    // 检查并执行LRU淘汰策略
+    evictLRUCacheIfNeeded();
+}
+
+void ChatServer::evictLRUCacheIfNeeded() {
+    // 当活跃会话数超过最大限制时，开始淘汰
+    while (lruCacheList_.size() > MAX_ACTIVE_SESSIONS) {
+        // 获取并移除LRU链表尾部元素（最久未使用的会话）
+        auto last = lruCacheList_.back();
+        int userId = last.first;
+        std::string sessionId = last.second;
+        
+        lruCacheMap_.erase(sessionId);
+        lruCacheList_.pop_back();
+        
+        // 从内存中的聊天信息里移除该会话
+        auto userIt = chatInformation.find(userId);
+        if (userIt != chatInformation.end()) {
+            userIt->second.erase(sessionId);
+            // 如果该用户的所有会话都被移除，则清理用户条目
+            if (userIt->second.empty()) {
+                chatInformation.erase(userIt);
+            }
+        }
+        
+        std::cout << "LRU Cache Eviction: Removed session '" << sessionId 
+                  << "' for user " << userId << std::endl;
+    }
+}
+
 void ChatServer::initializeMiddleware() {
     // 添加 CORS 中间件
     auto corsMiddleware = std::make_shared<http::middleware::CorsMiddleware>();
@@ -194,5 +243,3 @@ void ChatServer::packageResp(const std::string& version, http::HttpResponse::Htt
 	resp->setContentLength(contentLen);
 	resp->setBody(body);
 }
-
-void ChatServer::initChatMessage() {}
