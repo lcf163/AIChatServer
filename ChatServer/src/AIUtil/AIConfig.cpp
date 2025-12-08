@@ -1,5 +1,17 @@
 #include "AIUtil/AIConfig.h"
 
+// 单例实例
+AIConfig& AIConfig::getInstance() {
+    static AIConfig instance;
+    return instance;
+}
+
+// 私有构造函数
+AIConfig::AIConfig() : isLoaded_(false) {
+    // 默认加载配置文件
+    loadFromFile("../ChatServer/resource/config.json");
+}
+
 bool AIConfig::loadFromFile(const std::string& path) {
     std::ifstream file(path);
     if (!file.is_open()) {
@@ -29,10 +41,19 @@ bool AIConfig::loadFromFile(const std::string& path) {
             tools_.push_back(std::move(t));
         }
     }
+    
+    isLoaded_ = true;
     return true;
 }
 
 std::string AIConfig::buildToolList() const {
+    // 优先使用工具注册中心的工具列表
+    std::string registryTools = toolRegistry_.getToolListDescription();
+    if (!registryTools.empty()) {
+        return registryTools;
+    }
+    
+    // 如果注册中心没有工具，则使用配置文件中的工具列表
     std::ostringstream oss;
     for (const auto& t : tools_) {
         oss << t.name << "(";
@@ -48,6 +69,10 @@ std::string AIConfig::buildToolList() const {
 }
 
 std::string AIConfig::buildPrompt(const std::string& userInput) const {
+    if (!isLoaded_) {
+        return ""; // 配置未加载
+    }
+    
     std::string result = promptTemplate_;
     result = std::regex_replace(result, std::regex("\\{user_input\\}"), userInput);
     result = std::regex_replace(result, std::regex("\\{tool_list\\}"), buildToolList());
