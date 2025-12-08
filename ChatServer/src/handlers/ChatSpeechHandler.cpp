@@ -1,42 +1,37 @@
 #include "handlers/ChatSpeechHandler.h"
+#include "AIUtil/AISpeechProcessor.h"
+#include "AIUtil/AIConfig.h"
 
 void ChatSpeechHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {
     try
     {
-        auto session = server_->getSessionManager()->getSession(req, resp);
-        LOG_INFO << "session->getValue(\"isLoggedIn\") = " << session->getValue("isLoggedIn");
-        if (session->getValue("isLoggedIn") != "true")
-        {
-            json errorResp;
-            errorResp["status"] = "error";
-            errorResp["message"] = "Unauthorized";
-            std::string errorBody = errorResp.dump(4);
-
-            server_->packageResp(req.getVersion(), http::HttpResponse::k401Unauthorized,
-                "Unauthorized", true, "application/json", errorBody.size(),
-                errorBody, resp);
-            return;
-        }
-
-        int userId = std::stoi(session->getValue("userId"));
-        std::string username = session->getValue("username");
-        std::string text;
-
+        std::string text = "欢迎使用AI智能助手";
         auto body = req.getBody();
         if (!body.empty()) {
             auto j = json::parse(body);
             if (j.contains("text")) text = j["text"];
         }
 
-        const char* secretEnv = std::getenv("BAIDU_CLIENT_SECRET");
-        const char* idEnv = std::getenv("BAIDU_CLIENT_ID");
-
-        if (!secretEnv) throw std::runtime_error("BAIDU_CLIENT_SECRET not found!");
-        if (!idEnv) throw std::runtime_error("BAIDU_CLIENT_ID not found!");
-
-        std::string clientSecret(secretEnv);
-        std::string clientId(idEnv);
+        // 从配置中获取百度API密钥
+        const auto& apiKeys = AIConfig::getInstance().getApiKeysConfig();
+        std::string clientSecret, clientId;
+        
+        if (!apiKeys.baiduClientSecret.empty()) {
+            clientSecret = apiKeys.baiduClientSecret;
+        } else {
+            const char* secretEnv = std::getenv("BAIDU_CLIENT_SECRET");
+            if (!secretEnv) throw std::runtime_error("BAIDU_CLIENT_SECRET not found!");
+            clientSecret = std::string(secretEnv);
+        }
+        
+        if (!apiKeys.baiduClientId.empty()) {
+            clientId = apiKeys.baiduClientId;
+        } else {
+            const char* idEnv = std::getenv("BAIDU_CLIENT_ID");
+            if (!idEnv) throw std::runtime_error("BAIDU_CLIENT_ID not found!");
+            clientId = std::string(idEnv);
+        }
         // 创建语音处理器
         AISpeechProcessor speechProcessor(clientId, clientSecret);
         // 获取语音合成后的地址

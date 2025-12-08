@@ -24,6 +24,64 @@ struct AIToolCall {
     bool isToolCall = false;
 };
 
+// 数据库配置结构
+struct DatabaseConfig {
+    std::string host;
+    std::string user;
+    std::string password;
+    std::string database;
+    int poolSize;
+};
+
+// RabbitMQ配置结构
+struct RabbitMQConfig {
+    std::string host;
+    int port;
+    std::string username;
+    std::string password;
+    std::string vhost;
+    std::string queueName;
+    int threadNum;
+};
+
+// API密钥配置结构
+struct ApiKeysConfig {
+    std::string dashscopeApiKey;
+    std::string knowledgeBaseId;
+    std::string baiduClientId;
+    std::string baiduClientSecret;
+    std::string doubaoApiKey;
+    std::string doubaoModelId;
+};
+
+// 模型配置结构
+struct ModelConfig {
+    struct AliyunConfig {
+        std::string apiUrl;
+        std::string modelName;
+    };
+    
+    struct DoubaoConfig {
+        std::string apiUrl;
+        std::string modelName;
+    };
+    
+    struct AliyunRagConfig {
+        std::string apiUrlPrefix;
+        std::string apiUrlSuffix;
+    };
+    
+    struct AliyunMcpConfig {
+        std::string apiUrl;
+        std::string modelName;
+    };
+    
+    AliyunConfig aliyun;
+    DoubaoConfig doubao;
+    AliyunRagConfig aliyunRag;
+    AliyunMcpConfig aliyunMcp;
+};
+
 class AIConfig {
 public:
     static AIConfig& getInstance();
@@ -37,6 +95,12 @@ public:
         const json& toolArgs,
         const json& toolResult) const;
 
+    // 获取配置项
+    const DatabaseConfig& getDatabaseConfig() const { return dbConfig_; }
+    const RabbitMQConfig& getRabbitMQConfig() const { return mqConfig_; }
+    const ApiKeysConfig& getApiKeysConfig() const { return apiKeysConfig_; }
+    const ModelConfig& getModelConfig() const { return modelConfig_; }
+
 private:
     AIConfig(); // 私有构造函数
     ~AIConfig() = default;
@@ -47,6 +111,12 @@ private:
     std::vector<AITool> tools_;
     mutable AIToolRegistry toolRegistry_; // 用于获取工具列表信息
     bool isLoaded_;
+
+    // 配置项
+    DatabaseConfig dbConfig_;
+    RabbitMQConfig mqConfig_;
+    ApiKeysConfig apiKeysConfig_;
+    ModelConfig modelConfig_;
 
     std::string buildToolList() const;
 };

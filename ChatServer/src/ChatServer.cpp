@@ -16,6 +16,7 @@
 #include "handlers/ChatSessionsHandler.h"
 #include "handlers/ChatSpeechHandler.h"
 #include "ChatServer.h"
+#include "AIUtil/AIConfig.h"
 
 using namespace http;
 
@@ -30,8 +31,11 @@ ChatServer::ChatServer(int port,
 void ChatServer::initialize() {
     std::cout << "ChatServer initialize start ! " << std::endl;
     
+    // 从配置中获取数据库信息
+    const auto& dbConfig = AIConfig::getInstance().getDatabaseConfig();
+    
     // 初始化 MysqlUtil
-	http::MysqlUtil::init("tcp://127.0.0.1:3306", "root", "root", "ChatHttpServer", 5);
+	http::MysqlUtil::init(dbConfig.host, dbConfig.user, dbConfig.password, dbConfig.database, dbConfig.poolSize);
     
     // 初始化 Session（包含会话列表懒加载）
     initializeSession();

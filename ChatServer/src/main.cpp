@@ -7,13 +7,13 @@
 #include <muduo/net/EventLoop.h>
 
 #include "ChatServer.h"
-
-const std::string RABBITMQ_HOST = "localhost";
-const std::string QUEUE_NAME = "sql_queue";
-const int THREAD_NUM = 2;
+#include "AIUtil/AIConfig.h"
 
 // 工作线程绑定的函数
 void executeMysql(const std::string sql_with_params) {
+    // 从配置中获取数据库信息
+    const auto& dbConfig = AIConfig::getInstance().getDatabaseConfig();
+    
     http::MysqlUtil mysqlUtil_;
     
     // 解析SQL和参数
@@ -92,14 +92,28 @@ int main(int argc, char* argv[]) {
     }
 
     muduo::Logger::setLogLevel(muduo::Logger::WARN);
+    
+    // 加载配置文件
+    AIConfig& config = AIConfig::getInstance();
+    if (!config.loadFromFile("../ChatServer/resource/config.json")) {
+        std::cerr << "Failed to load config file!" << std::endl;
+        return -1;
+    }
+    
     // 初始化 ChatServer
     ChatServer server(port, serverName);
     // server.setThreadNum(4);
     std::this_thread::sleep_for(std::chrono::seconds(2));
+    
+    // 从配置中获取RabbitMQ信息
+    const auto& mqConfig = config.getRabbitMQConfig();
+    
     // 初始化线程池，绑定参数
-    RabbitMQThreadPool pool(RABBITMQ_HOST, QUEUE_NAME, THREAD_NUM, executeMysql);
+    RabbitMQThreadPool pool(mqConfig.host, mqConfig.queueName, mqConfig.threadNum, executeMysql);
     // 启动线程池，作为消费者处理 MQ 的消息
     pool.start();
 
     server.start();
+    
+    return 0;
 }

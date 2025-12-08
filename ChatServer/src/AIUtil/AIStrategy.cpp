@@ -2,7 +2,7 @@
 #include "AIUtil/AIFactory.h"
 
 std::string AliyunStrategy::getApiUrl() const {
-    return "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+    return apiUrl_;
 }
 
 std::string AliyunStrategy::getApiKey()const {
@@ -10,7 +10,7 @@ std::string AliyunStrategy::getApiKey()const {
 }
 
 std::string AliyunStrategy::getModel() const {
-    return "qwen-plus";
+    return modelName_;
 }
 
 json AliyunStrategy::buildRequest(const std::vector<std::pair<std::string, long long>>& messages) const {
@@ -42,7 +42,7 @@ std::string AliyunStrategy::parseResponse(const json& response) const {
 
 
 std::string DouBaoStrategy::getApiUrl()const {
-    return "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
+    return apiUrl_;
 }
 
 std::string DouBaoStrategy::getApiKey()const {
@@ -50,7 +50,7 @@ std::string DouBaoStrategy::getApiKey()const {
 }
 
 std::string DouBaoStrategy::getModel() const {
-    return "doubao-seed-1-6-thinking-250715";
+    return modelName_;
 }
 
 json DouBaoStrategy::buildRequest(const std::vector<std::pair<std::string, long long>>& messages) const {
@@ -82,10 +82,7 @@ std::string DouBaoStrategy::parseResponse(const json& response) const {
 
 
 std::string AliyunRAGStrategy::getApiUrl() const {
-    const char* key = std::getenv("Knowledge_Base_ID");
-    if (!key) throw std::runtime_error("Knowledge_Base_ID not found!");
-    std::string id(key);
-    return "https://dashscope.aliyuncs.com/api/v1/apps/" + id + "/completion";
+    return apiUrlPrefix_ + knowledgeBaseId_ + apiUrlSuffix_;
 }
 
 std::string AliyunRAGStrategy::getApiKey()const {
@@ -119,7 +116,7 @@ std::string AliyunRAGStrategy::parseResponse(const json& response) const {
 
 
 std::string AliyunMcpStrategy::getApiUrl() const {
-    return "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+    return apiUrl_;
 }
 
 std::string AliyunMcpStrategy::getApiKey()const {
@@ -127,7 +124,7 @@ std::string AliyunMcpStrategy::getApiKey()const {
 }
 
 std::string AliyunMcpStrategy::getModel() const {
-    return "qwen-plus";
+    return modelName_;
 }
 
 json AliyunMcpStrategy::buildRequest(const std::vector<std::pair<std::string, long long>>& messages) const {

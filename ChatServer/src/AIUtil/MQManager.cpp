@@ -1,11 +1,20 @@
 #include "AIUtil/MQManager.h"
+#include "AIUtil/AIConfig.h"
 
 // ------------------- MQManager -------------------
 MQManager::MQManager(size_t poolSize)
     : poolSize_(poolSize), counter_(0) {
+    // 从配置中获取RabbitMQ信息
+    const auto& mqConfig = AIConfig::getInstance().getRabbitMQConfig();
+    
     for (size_t i = 0; i < poolSize_; ++i) {
         auto conn = std::make_shared<MQConn>();
-        conn->channel = AmqpClient::Channel::Create("localhost", 5672, "guest", "guest", "/");
+        conn->channel = AmqpClient::Channel::Create(
+            mqConfig.host, 
+            mqConfig.port, 
+            mqConfig.username, 
+            mqConfig.password, 
+            mqConfig.vhost);
 
         pool_.push_back(conn);
     }
@@ -36,8 +45,17 @@ void RabbitMQThreadPool::shutdown() {
 
 void RabbitMQThreadPool::worker(int id) {
     try {
+        // 从配置中获取RabbitMQ信息
+        const auto& mqConfig = AIConfig::getInstance().getRabbitMQConfig();
+        
         // Each thread has its own independent channel
-        auto channel = AmqpClient::Channel::Create(rabbitmq_host_, 5672, "guest", "guest", "/");
+        auto channel = AmqpClient::Channel::Create(
+            rabbitmq_host_, 
+            mqConfig.port, 
+            mqConfig.username, 
+            mqConfig.password, 
+            mqConfig.vhost);
+            
         channel->DeclareQueue(queue_name_, false, true, false, false);
         std::string consumer_tag = channel->BasicConsume(queue_name_, "", true, false, false);
 

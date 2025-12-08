@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "utils/JsonUtil.h"
+#include "AIUtil/AIConfig.h"
 
 class AIStrategy {
 public:
@@ -29,9 +30,19 @@ public:
 class AliyunStrategy : public AIStrategy {
 public:
     AliyunStrategy() {
-        const char* key = std::getenv("DASHSCOPE_API_KEY");
-        if (!key) throw std::runtime_error("Aliyun API Key not found!");
-        apiKey_ = key;
+        const auto& apiKeys = AIConfig::getInstance().getApiKeysConfig();
+        const auto& modelConfig = AIConfig::getInstance().getModelConfig();
+        
+        if (!apiKeys.dashscopeApiKey.empty()) {
+            apiKey_ = apiKeys.dashscopeApiKey;
+        } else {
+            const char* key = std::getenv("DASHSCOPE_API_KEY");
+            if (!key) throw std::runtime_error("Aliyun API Key not found!");
+            apiKey_ = std::string(key);
+        }
+        
+        apiUrl_ = modelConfig.aliyun.apiUrl;
+        modelName_ = modelConfig.aliyun.modelName;
         isMCPModel = false;
     }
 
@@ -44,14 +55,32 @@ public:
 
 private:
     std::string apiKey_;
+    std::string apiUrl_;
+    std::string modelName_;
 };
 
 class DouBaoStrategy : public AIStrategy {
 public:
     DouBaoStrategy() {
-        const char* key = std::getenv("DOUBAO_API_KEY");
-        if (!key) throw std::runtime_error("DOUBAO API Key not found!");
-        apiKey_ = key;
+        const auto& apiKeys = AIConfig::getInstance().getApiKeysConfig();
+        const auto& modelConfig = AIConfig::getInstance().getModelConfig();
+        
+        if (!apiKeys.doubaoApiKey.empty()) {
+            apiKey_ = apiKeys.doubaoApiKey;
+        } else {
+            const char* key = std::getenv("DOUBAO_API_KEY");
+            if (!key) throw std::runtime_error("DOUBAO API Key not found!");
+            apiKey_ = std::string(key);
+        }
+        
+        // 如果配置中有指定的模型ID，则使用配置中的，否则使用默认的
+        if (!apiKeys.doubaoModelId.empty()) {
+            modelName_ = apiKeys.doubaoModelId;
+        } else {
+            modelName_ = modelConfig.doubao.modelName;
+        }
+        
+        apiUrl_ = modelConfig.doubao.apiUrl;
         isMCPModel = false;
     }
 
@@ -64,14 +93,34 @@ public:
 
 private:
     std::string apiKey_;
+    std::string apiUrl_;
+    std::string modelName_;
 };
 
 class AliyunRAGStrategy : public AIStrategy {
 public:
     AliyunRAGStrategy() {
-        const char* key = std::getenv("DASHSCOPE_API_KEY");
-        if (!key) throw std::runtime_error("Aliyun API Key not found!");
-        apiKey_ = key;
+        const auto& apiKeys = AIConfig::getInstance().getApiKeysConfig();
+        const auto& modelConfig = AIConfig::getInstance().getModelConfig();
+        
+        if (!apiKeys.dashscopeApiKey.empty()) {
+            apiKey_ = apiKeys.dashscopeApiKey;
+        } else {
+            const char* key = std::getenv("DASHSCOPE_API_KEY");
+            if (!key) throw std::runtime_error("Aliyun API Key not found!");
+            apiKey_ = std::string(key);
+        }
+        
+        if (!apiKeys.knowledgeBaseId.empty()) {
+            knowledgeBaseId_ = apiKeys.knowledgeBaseId;
+        } else {
+            const char* key = std::getenv("Knowledge_Base_ID");
+            if (!key) throw std::runtime_error("Knowledge_Base_ID not found!");
+            knowledgeBaseId_ = std::string(key);
+        }
+        
+        apiUrlPrefix_ = modelConfig.aliyunRag.apiUrlPrefix;
+        apiUrlSuffix_ = modelConfig.aliyunRag.apiUrlSuffix;
         isMCPModel = false;
     }
 
@@ -84,14 +133,27 @@ public:
 
 private:
     std::string apiKey_;
+    std::string knowledgeBaseId_;
+    std::string apiUrlPrefix_;
+    std::string apiUrlSuffix_;
 };
 
 class AliyunMcpStrategy : public AIStrategy {
 public:
     AliyunMcpStrategy() {
-        const char* key = std::getenv("DASHSCOPE_API_KEY");
-        if (!key) throw std::runtime_error("Aliyun API Key not found!");
-        apiKey_ = key;
+        const auto& apiKeys = AIConfig::getInstance().getApiKeysConfig();
+        const auto& modelConfig = AIConfig::getInstance().getModelConfig();
+        
+        if (!apiKeys.dashscopeApiKey.empty()) {
+            apiKey_ = apiKeys.dashscopeApiKey;
+        } else {
+            const char* key = std::getenv("DASHSCOPE_API_KEY");
+            if (!key) throw std::runtime_error("Aliyun API Key not found!");
+            apiKey_ = std::string(key);
+        }
+        
+        apiUrl_ = modelConfig.aliyunMcp.apiUrl;
+        modelName_ = modelConfig.aliyunMcp.modelName;
         isMCPModel = true;
     }
 
@@ -104,4 +166,6 @@ public:
 
 private:
     std::string apiKey_;
+    std::string apiUrl_;
+    std::string modelName_;
 };
