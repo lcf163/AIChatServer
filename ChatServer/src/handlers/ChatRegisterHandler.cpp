@@ -1,3 +1,4 @@
+#include "AIUtil/PasswordUtil.h"
 #include "handlers/ChatRegisterHandler.h"
 
 void ChatRegisterHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
@@ -38,10 +39,16 @@ void ChatRegisterHandler::handle(const http::HttpRequest& req, http::HttpRespons
 
 int ChatRegisterHandler::insertUser(const std::string& username, const std::string& password)
 {
+    // 生成盐值
+    std::string salt = util::PasswordUtil::generateSalt();
+    
+    // 使用PBKDF2算法对密码进行哈希
+    std::string hashedPassword = util::PasswordUtil::hashPassword(password, salt);
+    
     // 使用 INSERT IGNORE 来避免竞态条件
     // 如果用户名已存在，插入会被忽略，返回0行受影响
-    std::string sql = "INSERT IGNORE INTO users (username, password) VALUES (?, ?)";
-    int affectedRows = mysqlUtil_.executeUpdate(sql, username, password);
+    std::string sql = "INSERT IGNORE INTO users (username, password, salt) VALUES (?, ?, ?)";
+    int affectedRows = mysqlUtil_.executeUpdate(sql, username, hashedPassword, salt);
     
     // 如果插入成功（影响行数大于0），则获取用户ID
     if (affectedRows > 0) {

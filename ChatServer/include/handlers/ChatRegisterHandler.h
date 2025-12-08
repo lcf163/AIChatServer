@@ -2,7 +2,7 @@
 
 #include "router/RouterHandler.h"
 #include "utils/MysqlUtil.h"
-
+#include "utils/JsonUtil.h"
 #include "ChatServer.h"
 
 class ChatRegisterHandler : public http::router::RouterHandler

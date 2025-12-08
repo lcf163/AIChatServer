@@ -1,3 +1,4 @@
+#include "AIUtil/PasswordUtil.h"
 #include "handlers/ChatLoginHandler.h"
 
 void ChatLoginHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
@@ -95,13 +96,21 @@ void ChatLoginHandler::handle(const http::HttpRequest& req, http::HttpResponse* 
 
 int ChatLoginHandler::queryUserId(const std::string& username, const std::string& password)
 {
-    std::string sql = "SELECT id FROM users WHERE username = ? AND password = ?";
-    auto res = mysqlUtil_.executeQuery(sql, username, password);
+    // 先查询用户的盐值
+    std::string saltSql = "SELECT id, password, salt FROM users WHERE username = ?";
+    auto res = mysqlUtil_.executeQuery(saltSql, username);
     
     if (res->next())
     {
         int id = res->getInt("id");
-        return id;
+        std::string storedPassword = res->getString("password");
+        std::string salt = res->getString("salt");
+        
+        // 验证密码
+        if (util::PasswordUtil::verifyPassword(password, salt, storedPassword))
+        {
+            return id;
+        }
     }
 
     return -1;
