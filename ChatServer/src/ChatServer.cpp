@@ -2,21 +2,20 @@
 #include "http/HttpResponse.h"
 #include "http/HttpServer.h"
 
+#include "handlers/ChatEntryHandler.h"
 #include "handlers/ChatLoginHandler.h"
 #include "handlers/ChatRegisterHandler.h"
 #include "handlers/ChatLogoutHandler.h"
 #include "handlers/ChatHandler.h"
-#include "handlers/ChatEntryHandler.h"
 #include "handlers/ChatSendHandler.h"
-#include "handlers/AIMenuHandler.h"
+#include "handlers/ChatSessionsHandler.h"
 #include "handlers/ChatHistoryHandler.h"
 #include "handlers/ChatCreateAndSendHandler.h"
-#include "handlers/ChatGetResultHandler.h"
 #include "handlers/SSEChatHandler.h"
-#include "handlers/ChatSessionsHandler.h"
 #include "handlers/ChatSpeechHandler.h"
-#include "ChatServer.h"
+#include "handlers/AIMenuHandler.h"
 #include "AIUtil/AIConfig.h"
+#include "ChatServer.h"
 
 using namespace http;
 
@@ -180,7 +179,6 @@ void ChatServer::initializeRouter() {
     httpServer_.Get("/chat/sessions", std::make_shared<ChatSessionsHandler>(this));
     httpServer_.Post("/chat/history", std::make_shared<ChatHistoryHandler>(this));
     httpServer_.Post("/chat/send-new-session", std::make_shared<ChatCreateAndSendHandler>(this));
-    // httpServer_.Post("/chat/get-result", std::make_shared<ChatGetResultHandler>(this)); // 已废弃，改用SSE
     httpServer_.Get("/chat/stream", std::make_shared<SSEChatHandler>(this));
  
     httpServer_.Get("/menu", std::make_shared<AIMenuHandler>(this));

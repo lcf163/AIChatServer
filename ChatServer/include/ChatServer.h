@@ -31,7 +31,6 @@ class ChatSpeechHandler;
 class ChatSessionsHandler;
 class ChatHistoryHandler;
 class ChatCreateAndSendHandler;
-class ChatGetResultHandler;
 class SSEChatHandler;
 
 class AIMenuHandler;
@@ -70,7 +69,6 @@ private:
 	friend class ChatHistoryHandler;
 	friend class ChatSessionsHandler;
 	friend class ChatCreateAndSendHandler;
-	friend class ChatGetResultHandler;
 	friend class SSEChatHandler;
 	friend class AIMenuHandler;
 
