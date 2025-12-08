@@ -5,15 +5,15 @@ project(http_server)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 添加头文件路径
-include_directories(
-    ${PROJECT_SOURCE_DIR}/HttpServer/include
-)
-
 # 查找必要的库
 find_library(MYSQLCPPCONN_LIBRARY
     NAMES mysqlcppconn mysqlcppconn8
     PATHS /usr/lib /usr/lib64 /usr/local/lib
+)
+
+# 添加头文件路径
+include_directories(
+    ${PROJECT_SOURCE_DIR}/HttpServer/include
 )
 
 # 添加 HttpServer 源文件
@@ -43,7 +43,3 @@ target_link_libraries(http_server
 
 # 如果库不在默认路径，添加链接目录
 link_directories(/usr/local/lib)
-
-# 打印调试信息
-message(STATUS "HTTP Server sources: ${HTTP_SERVER_SRC}")
-message(STATUS "HTTP Server Demo source file: ${HTTP_SERVER_DEMO_SRC}")

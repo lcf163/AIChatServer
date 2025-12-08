@@ -44,7 +44,6 @@ void ChatSendHandler::handle(const http::HttpRequest& req, http::HttpResponse* r
                 // 第一次访问：创建新实例
                 AIHelperPtr = std::make_shared<AIHelper>();
                 userSessions[sessionId] = AIHelperPtr;
-                std::cout << "Created new session " << sessionId << " for message sending" << std::endl;
             } else {
                 // 已存在：直接获取
                 AIHelperPtr = userSessions[sessionId];
@@ -68,10 +67,9 @@ void ChatSendHandler::handle(const http::HttpRequest& req, http::HttpResponse* r
         server_->businessThreadPool_->enqueue([this, sessionId, userId, future = std::move(future)]() mutable {
             try {
                 std::string result = future.get();
-                // 通过WebSocket推送结果给客户端
+                // 通过WebSocket推送结果给客户端        
                 std::lock_guard<std::mutex> lock(server_->mutexForChatResults);
                 server_->chatResults[sessionId] = result;
-                std::cout << "Stored result for session: " << sessionId << ", result length: " << result.length() << std::endl;
             } catch (const std::exception& e) {
                 std::cerr << "AI task failed for session " << sessionId << ": " << e.what() << std::endl;
             }

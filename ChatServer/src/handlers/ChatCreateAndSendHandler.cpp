@@ -5,7 +5,6 @@ void ChatCreateAndSendHandler::handle(const http::HttpRequest& req, http::HttpRe
     try
     {
         auto session = server_->getSessionManager()->getSession(req, resp);
-        LOG_INFO << "session->getValue(\"isLoggedIn\") = " << session->getValue("isLoggedIn");
         if (session->getValue("isLoggedIn") != "true")
         {
             json errorResp;
@@ -34,7 +33,6 @@ void ChatCreateAndSendHandler::handle(const http::HttpRequest& req, http::HttpRe
 
         AISessionIdGenerator generator;
         std::string sessionId = generator.generate();
-        std::cout<< "sessionId: " << sessionId << std::endl;
 
         // 持久化会话到数据库
         try {
@@ -45,7 +43,6 @@ void ChatCreateAndSendHandler::handle(const http::HttpRequest& req, http::HttpRe
                 + "'新对话')";
             
             mysqlUtil_.executeUpdate(insertSessionSql);
-            std::cout << "Session " << sessionId << " persisted to database" << std::endl;
         } catch (const std::exception& e) {
             std::cerr << "Failed to persist session to database: " << e.what() << std::endl;
             // 继续执行，即使数据库操作失败
@@ -76,7 +73,6 @@ void ChatCreateAndSendHandler::handle(const http::HttpRequest& req, http::HttpRe
                 // 通过WebSocket推送结果给客户端
                 std::lock_guard<std::mutex> lock(server_->mutexForChatResults);
                 server_->chatResults[sessionId] = result;
-                std::cout << "Stored result for session: " << sessionId << ", result length: " << result.length() << std::endl;
             } catch (const std::exception& e) {
                 std::cerr << "AI task failed for session " << sessionId << ": " << e.what() << std::endl;
             }

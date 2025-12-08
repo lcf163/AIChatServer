@@ -124,6 +124,9 @@ private:
                    muduo::net::Buffer* buf,
                    muduo::Timestamp receiveTime);
     void onRequest(const muduo::net::TcpConnectionPtr&, const HttpRequest&);
+    
+    // 流式响应处理
+    void onStreamWrite(const muduo::net::TcpConnectionPtr& conn, HttpResponse* resp);
 
     void handleRequest(const HttpRequest& req, HttpResponse* resp);
     
@@ -139,6 +142,9 @@ private:
     bool                                         useSSL_; // 是否使用 SSL   
     // TcpConnectionPtr -> SslConnectionPtr 
     std::map<muduo::net::TcpConnectionPtr, std::unique_ptr<ssl::SslConnection>> sslConns_;
+    
+    // 存储正在进行流式响应的连接和响应对象
+    std::map<muduo::net::TcpConnectionPtr, std::unique_ptr<HttpResponse>> streamingResponses_;
 }; 
 
 } // namespace http

@@ -41,7 +41,7 @@ int main(int argc, char* argv[]) {
     muduo::Logger::setLogLevel(muduo::Logger::WARN);
     // 初始化 ChatServer
     ChatServer server(port, serverName);
-    server.setThreadNum(4);
+    // server.setThreadNum(4);
     std::this_thread::sleep_for(std::chrono::seconds(2));
     // 初始化线程池，绑定参数
     RabbitMQThreadPool pool(RABBITMQ_HOST, QUEUE_NAME, THREAD_NUM, executeMysql);

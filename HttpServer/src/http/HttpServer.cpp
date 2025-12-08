@@ -30,7 +30,7 @@ HttpServer::HttpServer(int port,
 // 服务器运行函数
 void HttpServer::start()
 {
-    LOG_WARN << "HttpServer[" << server_.name() << "] starts listening on" << server_.ipPort();
+    LOG_WARN << "HttpServer[" << server_.name() << "] starts listening on " << server_.ipPort();
     server_.start();
     mainLoop_.loop();
 }
@@ -152,6 +152,21 @@ void HttpServer::onRequest(const muduo::net::TcpConnectionPtr &conn, const HttpR
     // 根据请求报文信息来封装响应报文对象
     httpCallback_(req, &response); // 执行 onHttpCallback 函数
 
+    // 检查是否为流式响应
+    if (response.isStreaming()) {
+        // 保存流式响应对象
+        streamingResponses_[conn] = std::make_unique<HttpResponse>(response);
+        
+        // 发送初始响应头
+        muduo::net::Buffer buf;
+        response.appendToBuffer(&buf);
+        conn->send(&buf);
+        
+        // 开始流式写入
+        onStreamWrite(conn, streamingResponses_[conn].get());
+        return;
+    }
+
     // response 设置一个成员，判断是否请求的是文件，如果是文件设置为 true，并且文件位置在这里 send 出去。
     muduo::net::Buffer buf;
     response.appendToBuffer(&buf);
@@ -163,6 +178,35 @@ void HttpServer::onRequest(const muduo::net::TcpConnectionPtr &conn, const HttpR
     if (response.closeConnection())
     {
         conn->shutdown();
+    }
+}
+
+// 流式响应处理
+void HttpServer::onStreamWrite(const muduo::net::TcpConnectionPtr& conn, HttpResponse* resp) {
+    if (!conn->connected()) {
+        // 连接已断开，清理资源
+        streamingResponses_.erase(conn);
+        return;
+    }
+    
+    auto& callback = resp->getStreamWriteCallback();
+    if (callback) {
+        bool continueStreaming = callback(conn, resp);
+        if (continueStreaming) {
+            // 继续下一轮流式写入
+            conn->getLoop()->runAfter(0.5, [this, conn, resp]() {  // 增加间隔到0.5秒
+                onStreamWrite(conn, resp);
+            });
+        } else {
+            // 流式传输完成，清理资源
+            streamingResponses_.erase(conn);
+            if (resp->closeConnection()) {
+                conn->shutdown();
+            }
+        }
+    } else {
+        // 没有回调函数，结束流式传输
+        streamingResponses_.erase(conn);
     }
 }
 

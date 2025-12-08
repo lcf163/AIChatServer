@@ -1,6 +1,9 @@
 #pragma once
 
 #include <muduo/net/TcpServer.h>
+#include <muduo/net/TcpConnection.h>
+#include <functional>
+#include <memory>
 
 namespace http
 {
@@ -8,6 +11,9 @@ namespace http
 class HttpResponse 
 {
 public:
+    // 流式写入回调函数类型
+    using StreamWriteCallback = std::function<bool(muduo::net::TcpConnectionPtr conn, HttpResponse* resp)>;
+    
     enum HttpStatusCode
     {
         kUnknown,
@@ -25,6 +31,7 @@ public:
     HttpResponse(bool close = true)
         : statusCode_(kUnknown)
         , closeConnection_(close)
+        , isStreaming_(false)
     {}
 
     void setVersion(std::string version)
@@ -53,10 +60,41 @@ public:
     void addHeader(const std::string& key, const std::string& value)
     { headers_[key] = value; }
     
+    const std::string& getHeader(const std::string& key) const
+    {
+        static const std::string empty;
+        auto it = headers_.find(key);
+        return it != headers_.end() ? it->second : empty;
+    }
+    
     void setBody(const std::string& body)
     { 
         body_ = body;
         // body_ += "\0";
+    }
+
+    // 设置流式响应模式
+    void setStreamingMode(bool streaming)
+    {
+        isStreaming_ = streaming;
+    }
+
+    // 设置流式写入回调
+    void setStreamWriteCallback(StreamWriteCallback callback)
+    {
+        streamWriteCallback_ = std::move(callback);
+    }
+
+    // 检查是否为流式响应
+    bool isStreaming() const
+    {
+        return isStreaming_;
+    }
+
+    // 获取流式写入回调
+    const StreamWriteCallback& getStreamWriteCallback() const
+    {
+        return streamWriteCallback_;
     }
 
     void setStatusLine(const std::string& version,
@@ -74,6 +112,10 @@ private:
     std::map<std::string, std::string> headers_;
     std::string                        body_;
     bool                               isFile_;
+    
+    // 流式响应相关字段
+    bool                               isStreaming_;
+    StreamWriteCallback                streamWriteCallback_;
 };
 
 } // namespace http
