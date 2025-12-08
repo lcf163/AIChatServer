@@ -1,38 +1,7 @@
 #include "AIUtil/AIConfig.h"
 
 AIConfig::AIConfig() : isLoaded_(false) {
-    // 初始化默认值
-    dbConfig_.host = "tcp://127.0.0.1:3306";
-    dbConfig_.user = "root";
-    dbConfig_.password = "root";
-    dbConfig_.database = "ChatHttpServer";
-    dbConfig_.poolSize = 5;
-    
-    mqConfig_.host = "localhost";
-    mqConfig_.port = 5672;
-    mqConfig_.username = "guest";
-    mqConfig_.password = "guest";
-    mqConfig_.vhost = "/";
-    mqConfig_.queueName = "sql_queue";
-    mqConfig_.threadNum = 2;
-    
-    // API密钥默认为空
-    apiKeysConfig_.dashscopeApiKey = "";
-    apiKeysConfig_.knowledgeBaseId = "";
-    apiKeysConfig_.baiduClientId = "";
-    apiKeysConfig_.baiduClientSecret = "";
-    apiKeysConfig_.doubaoApiKey = "";
-    apiKeysConfig_.doubaoModelId = "";
-    
-    // 模型配置默认值
-    modelConfig_.aliyun.apiUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
-    modelConfig_.aliyun.modelName = "qwen-plus";
-    modelConfig_.doubao.apiUrl = "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
-    modelConfig_.doubao.modelName = "doubao-seed-1-6-thinking-250715";
-    modelConfig_.aliyunRag.apiUrlPrefix = "https://dashscope.aliyuncs.com/api/v1/apps/";
-    modelConfig_.aliyunRag.apiUrlSuffix = "/completion";
-    modelConfig_.aliyunMcp.apiUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
-    modelConfig_.aliyunMcp.modelName = "qwen-plus";
+    // 工具已经在AIToolRegistry构造函数中注册
 }
 
 AIConfig& AIConfig::getInstance() {
@@ -41,66 +10,45 @@ AIConfig& AIConfig::getInstance() {
 }
 
 bool AIConfig::loadFromFile(const std::string& path) {
-    try {
-        std::ifstream file(path);
-        if (!file.is_open()) {
-            std::cerr << "Failed to open config file: " << path << std::endl;
-            return false;
-        }
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open config file: " << path << std::endl;
+        return false;
+    }
 
+    try {
         json config;
         file >> config;
         file.close();
 
-        // 加载提示模板
-        if (config.contains("prompt_template")) {
+        // 加载提示模板（强制从配置文件读取）
+        if (config.contains("prompt_template") && config["prompt_template"].is_string()) {
             promptTemplate_ = config["prompt_template"];
+        } else {
+            std::cerr << "Error: prompt_template not found in config file!" << std::endl;
+            return false;
         }
 
         // 加载数据库配置
         if (config.contains("database")) {
             auto dbConfig = config["database"];
-            if (dbConfig.contains("host")) {
-                dbConfig_.host = dbConfig["host"];
-            }
-            if (dbConfig.contains("user")) {
-                dbConfig_.user = dbConfig["user"];
-            }
-            if (dbConfig.contains("password")) {
-                dbConfig_.password = dbConfig["password"];
-            }
-            if (dbConfig.contains("database")) {
-                dbConfig_.database = dbConfig["database"];
-            }
-            if (dbConfig.contains("pool_size")) {
-                dbConfig_.poolSize = dbConfig["pool_size"];
-            }
+            if (dbConfig.contains("host")) dbConfig_.host = dbConfig["host"];
+            if (dbConfig.contains("user")) dbConfig_.user = dbConfig["user"];
+            if (dbConfig.contains("password")) dbConfig_.password = dbConfig["password"];
+            if (dbConfig.contains("database")) dbConfig_.database = dbConfig["database"];
+            if (dbConfig.contains("pool_size")) dbConfig_.poolSize = dbConfig["pool_size"];
         }
 
         // 加载RabbitMQ配置
         if (config.contains("rabbitmq")) {
             auto mqConfig = config["rabbitmq"];
-            if (mqConfig.contains("host")) {
-                mqConfig_.host = mqConfig["host"];
-            }
-            if (mqConfig.contains("port")) {
-                mqConfig_.port = mqConfig["port"];
-            }
-            if (mqConfig.contains("username")) {
-                mqConfig_.username = mqConfig["username"];
-            }
-            if (mqConfig.contains("password")) {
-                mqConfig_.password = mqConfig["password"];
-            }
-            if (mqConfig.contains("vhost")) {
-                mqConfig_.vhost = mqConfig["vhost"];
-            }
-            if (mqConfig.contains("queue_name")) {
-                mqConfig_.queueName = mqConfig["queue_name"];
-            }
-            if (mqConfig.contains("thread_num")) {
-                mqConfig_.threadNum = mqConfig["thread_num"];
-            }
+            if (mqConfig.contains("host")) mqConfig_.host = mqConfig["host"];
+            if (mqConfig.contains("port")) mqConfig_.port = mqConfig["port"];
+            if (mqConfig.contains("username")) mqConfig_.username = mqConfig["username"];
+            if (mqConfig.contains("password")) mqConfig_.password = mqConfig["password"];
+            if (mqConfig.contains("vhost")) mqConfig_.vhost = mqConfig["vhost"];
+            if (mqConfig.contains("queue_name")) mqConfig_.queueName = mqConfig["queue_name"];
+            if (mqConfig.contains("thread_num")) mqConfig_.threadNum = mqConfig["thread_num"];
         }
 
         // 加载API密钥配置
@@ -127,7 +75,7 @@ bool AIConfig::loadFromFile(const std::string& path) {
         if (config.contains("models")) {
             auto modelsConfig = config["models"];
             
-            // 阿里云模型配置
+            // 加载阿里云模型配置
             if (modelsConfig.contains("aliyun")) {
                 auto aliyunConfig = modelsConfig["aliyun"];
                 if (aliyunConfig.contains("api_url")) {
@@ -138,7 +86,7 @@ bool AIConfig::loadFromFile(const std::string& path) {
                 }
             }
             
-            // 豆包模型配置
+            // 加载豆包模型配置
             if (modelsConfig.contains("doubao")) {
                 auto doubaoConfig = modelsConfig["doubao"];
                 if (doubaoConfig.contains("api_url")) {
@@ -149,7 +97,7 @@ bool AIConfig::loadFromFile(const std::string& path) {
                 }
             }
             
-            // 阿里云RAG配置
+            // 加载阿里云RAG配置
             if (modelsConfig.contains("aliyun_rag")) {
                 auto aliyunRagConfig = modelsConfig["aliyun_rag"];
                 if (aliyunRagConfig.contains("api_url_prefix")) {
@@ -160,7 +108,7 @@ bool AIConfig::loadFromFile(const std::string& path) {
                 }
             }
             
-            // 阿里云MCP配置
+            // 加载阿里云MCP配置
             if (modelsConfig.contains("aliyun_mcp")) {
                 auto aliyunMcpConfig = modelsConfig["aliyun_mcp"];
                 if (aliyunMcpConfig.contains("api_url")) {
@@ -172,30 +120,25 @@ bool AIConfig::loadFromFile(const std::string& path) {
             }
         }
 
-        // 加载工具配置
-        if (config.contains("tools")) {
-            tools_.clear();
-            for (const auto& toolItem : config["tools"]) {
-                AITool tool;
-                if (toolItem.contains("name")) {
-                    tool.name = toolItem["name"];
+        // 加载语音服务提供商配置
+        if (config.contains("speech_service")) {
+            auto speechServiceConfig = config["speech_service"];
+            if (speechServiceConfig.contains("provider")) {
+                std::string provider = speechServiceConfig["provider"];
+                std::transform(provider.begin(), provider.end(), provider.begin(), ::tolower);
+                
+                if (provider == "baidu") {
+                    speechServiceProvider_ = SpeechServiceProvider::BAIDU;
+                } else {
+                    speechServiceProvider_ = SpeechServiceProvider::UNKNOWN;
                 }
-                if (toolItem.contains("desc")) {
-                    tool.desc = toolItem["desc"];
-                }
-                if (toolItem.contains("params")) {
-                    for (auto it = toolItem["params"].begin(); it != toolItem["params"].end(); ++it) {
-                        tool.params[it.key()] = it.value();
-                    }
-                }
-                tools_.push_back(tool);
             }
         }
 
         isLoaded_ = true;
         return true;
     } catch (const std::exception& e) {
-        std::cerr << "Failed to load config from " << path << ": " << e.what() << std::endl;
+        std::cerr << "Error parsing config file: " << e.what() << std::endl;
         return false;
     }
 }
@@ -225,6 +168,12 @@ std::string AIConfig::buildToolList() const {
 std::string AIConfig::buildPrompt(const std::string& userInput) const {
     if (!isLoaded_) {
         return ""; // 配置未加载
+    }
+    
+    // 检查promptTemplate_是否为空
+    if (promptTemplate_.empty()) {
+        std::cerr << "Error: prompt_template is empty!" << std::endl;
+        return "";
     }
     
     std::string result = promptTemplate_;

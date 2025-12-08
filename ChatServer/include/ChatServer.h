@@ -4,7 +4,6 @@
 #include <memory>
 #include <tuple>
 #include <unordered_map>
-#include <list>
 #include <mutex>
 #include <cstdlib>
 #include <ctime>
@@ -15,11 +14,11 @@
 #include "http/HttpServer.h"
 #include "utils/MysqlUtil.h"
 #include "utils/FileUtil.h"
+#include "utils/JsonUtil.h"
 
 #include "utils/base64.h"
 #include "utils/MQManager.h"
 #include "utils/ThreadPool.h"
-#include "AIUtil/AISpeechProcessor.h"
 #include "AIUtil/AIHelper.h"
 
 class ChatLoginHandler;

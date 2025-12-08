@@ -1,4 +1,5 @@
 #include "AIUtil/AIFactory.h"
+#include "AIUtil/BaiduSpeechService.h"
 
 StrategyFactory& StrategyFactory::instance() {
     static StrategyFactory factory;
@@ -15,4 +16,16 @@ std::shared_ptr<AIStrategy> StrategyFactory::create(const std::string& name) {
         throw std::runtime_error("Unknown strategy: " + name);
     }
     return it->second();
+}
+
+std::unique_ptr<SpeechService> SpeechServiceFactory::createSpeechService(SpeechServiceProvider provider,
+                                                                       const std::string& clientId,
+                                                                       const std::string& clientSecret) {
+    switch (provider) {
+        case SpeechServiceProvider::BAIDU:
+            return std::make_unique<BaiduSpeechService>(clientId, clientSecret);
+        case SpeechServiceProvider::UNKNOWN:
+        default:
+            return nullptr;
+    }
 }

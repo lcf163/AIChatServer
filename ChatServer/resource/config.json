@@ -41,18 +41,7 @@
       "model_name": "qwen-plus"
     }
   },
-  "tools": [
-    {
-      "name": "get_weather",
-      "params": {
-        "city": "城市名称，如：北京、上海等"
-      },
-      "desc": "获取指定城市的天气信息，需要提供城市名称参数"
-    },
-    {
-      "name": "get_time",
-      "params": {},
-      "desc": "获取当前时间，无需参数"
-    }
-  ]
+  "speech_service": {
+    "provider": "baidu"
+  }
 }

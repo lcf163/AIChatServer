@@ -1,4 +1,8 @@
 #include "handlers/ChatSpeechHandler.h"
+#include "utils/JsonUtil.h"
+#include "utils/ParseJsonUtil.h"
+#include "AIUtil/AIConfig.h"
+#include "AIUtil/AIFactory.h"
 
 void ChatSpeechHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {
@@ -15,56 +19,70 @@ void ChatSpeechHandler::handle(const http::HttpRequest& req, http::HttpResponse*
             if (j.contains("text")) text = j["text"];
         }
 
-        // 从配置中获取百度API密钥
-        const auto& apiKeys = AIConfig::getInstance().getApiKeysConfig();
-        std::string clientSecret, clientId;
+        // 获取百度API密钥
+        auto& apiKeys = AIConfig::getInstance().getApiKeysConfig();
+        std::string clientId, clientSecret;
         
         if (!apiKeys.baiduClientSecret.empty()) {
             clientSecret = apiKeys.baiduClientSecret;
         } else {
-            const char* secretEnv = std::getenv("BAIDU_CLIENT_SECRET");
-            if (!secretEnv) throw std::runtime_error("BAIDU_CLIENT_SECRET not found!");
-            clientSecret = std::string(secretEnv);
+            throw std::runtime_error("BAIDU_CLIENT_SECRET not found in config!");
         }
         
         if (!apiKeys.baiduClientId.empty()) {
             clientId = apiKeys.baiduClientId;
         } else {
-            const char* idEnv = std::getenv("BAIDU_CLIENT_ID");
-            if (!idEnv) throw std::runtime_error("BAIDU_CLIENT_ID not found!");
-            clientId = std::string(idEnv);
+            throw std::runtime_error("BAIDU_CLIENT_ID not found in config!");
         }
-        // 创建语音处理器
-        AISpeechProcessor speechProcessor(clientId, clientSecret);
+        
+        // 通过工厂创建语音服务实例
+        auto speechServiceProvider = AIConfig::getInstance().getSpeechServiceProvider();
+        std::unique_ptr<SpeechService> speechService = SpeechServiceFactory::createSpeechService(
+            speechServiceProvider, clientId, clientSecret);
+        
+        if (!speechService) {
+            throw std::runtime_error("Failed to create speech service instance");
+        }
+        
         // 获取语音合成后的地址
-        std::string speechUrl = speechProcessor.synthesize(text,
-                                                           "mp3-16k", 
-                                                           "zh",  
-                                                            5, 
-                                                            5, 
-                                                            5 );  
+        std::string speechUrl = speechService->synthesize(text,
+                                                         "mp3-16k", 
+                                                         "zh", 
+                                                         5,  // speed
+                                                         5,  // pitch
+                                                         5); // volume
+                                                         
+        // 构造响应JSON，与前端JavaScript代码中期望的字段匹配
+        json responseJson;
+        responseJson["success"] = true;
+        responseJson["url"] = speechUrl;
+        responseJson["text"] = text;
 
-        json successResp;
-        successResp["success"] = true;
-        successResp["url"] = speechUrl;
-        std::string successBody = successResp.dump(4);
-        resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
-        resp->setCloseConnection(false);
-        resp->setContentType("application/json");
-        resp->setContentLength(successBody.size());
-        resp->setBody(successBody);
-        return;
+        std::string responseBody = responseJson.dump(4);
+
+        server_->packageResp(req.getVersion(), 
+                            http::HttpResponse::k200Ok, 
+                            "OK", 
+                            false, 
+                            "application/json", 
+                            responseBody.length(), 
+                            responseBody, 
+                            resp);
     }
     catch (const std::exception& e)
     {
-        json failureResp;
-        failureResp["status"] = "error";
-        failureResp["message"] = e.what();
-        std::string failureBody = failureResp.dump(4);
-        resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
-        resp->setCloseConnection(true);
-        resp->setContentType("application/json");
-        resp->setContentLength(failureBody.size());
-        resp->setBody(failureBody);
+        json errorResp;
+        errorResp["success"] = false;
+        errorResp["message"] = e.what();
+        std::string errorBody = errorResp.dump(4);
+
+        server_->packageResp(req.getVersion(), 
+                            http::HttpResponse::k500InternalServerError, 
+                            "Internal Server Error", 
+                            true, 
+                            "application/json", 
+                            errorBody.length(), 
+                            errorBody, 
+                            resp);
     }
 }

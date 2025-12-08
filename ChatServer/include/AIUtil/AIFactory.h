@@ -10,6 +10,8 @@
 #include <unordered_map>
 
 #include "AIStrategy.h"
+#include "AIConfig.h"
+#include "SpeechService.h"
 
 class StrategyFactory {
 public:
@@ -33,4 +35,15 @@ struct StrategyRegister {
             return std::make_shared<T>();
         });
     }
+};
+
+/**
+ * 语音服务工厂类
+ * 根据配置创建对应的语音服务实例
+ */
+class SpeechServiceFactory {
+public:
+    static std::unique_ptr<SpeechService> createSpeechService(SpeechServiceProvider provider,
+                                                              const std::string& clientId,
+                                                              const std::string& clientSecret);
 };

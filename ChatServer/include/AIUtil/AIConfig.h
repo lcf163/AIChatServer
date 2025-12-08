@@ -12,6 +12,12 @@
 #include "utils/JsonUtil.h"  
 #include "AIToolRegistry.h"
 
+// 添加语音服务提供商枚举
+enum class SpeechServiceProvider {
+    BAIDU,
+    UNKNOWN
+};
+
 struct AITool {
     std::string name;
     std::unordered_map<std::string, std::string> params;
@@ -100,6 +106,7 @@ public:
     const RabbitMQConfig& getRabbitMQConfig() const { return mqConfig_; }
     const ApiKeysConfig& getApiKeysConfig() const { return apiKeysConfig_; }
     const ModelConfig& getModelConfig() const { return modelConfig_; }
+    SpeechServiceProvider getSpeechServiceProvider() const { return speechServiceProvider_; }
 
 private:
     AIConfig(); // 私有构造函数
@@ -117,6 +124,7 @@ private:
     RabbitMQConfig mqConfig_;
     ApiKeysConfig apiKeysConfig_;
     ModelConfig modelConfig_;
+    SpeechServiceProvider speechServiceProvider_;
 
     std::string buildToolList() const;
 };

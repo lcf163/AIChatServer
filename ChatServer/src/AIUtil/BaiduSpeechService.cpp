@@ -1,12 +1,31 @@
-#include "AIUtil/AISpeechProcessor.h"
- 
-static size_t onWriteData(void* buffer, size_t size, size_t nmemb, void* userp) {
+
+#include "utils/JsonUtil.h"
+#include "AIUtil/BaiduSpeechService.h"
+#include <iostream>
+#include <thread>
+
+// 定义轮询参数常量
+static const int MAX_POLLING_LOOPS = 60;          // 最多轮询60次
+static const int POLLING_INTERVAL_SECONDS = 1;    // 每次轮询间隔1秒
+
+BaiduSpeechService::BaiduSpeechService(const std::string& clientId,
+                                     const std::string& clientSecret,
+                                     const std::string& cuid)
+    : client_id_(clientId), client_secret_(clientSecret), cuid_(cuid) {
+    // 如果cuid为空，则使用clientId作为默认值
+    if (cuid_.empty()) {
+        cuid_ = clientId;
+    }
+    token_ = getAccessToken();
+}
+
+size_t BaiduSpeechService::onWriteData(void* buffer, size_t size, size_t nmemb, void* userp) {
     std::string* str = static_cast<std::string*>(userp);
-    str->append((char*)buffer, size * nmemb);
+    str->append(static_cast<char*>(buffer), size * nmemb);
     return size * nmemb;
 }
 
-std::string AISpeechProcessor::getAccessToken() {
+std::string BaiduSpeechService::getAccessToken() {
     std::string result;
     CURL *curl = curl_easy_init();
     if (!curl) return "";
@@ -44,12 +63,10 @@ std::string AISpeechProcessor::getAccessToken() {
     return "";
 }
 
-// 语音识别
-std::string AISpeechProcessor::recognize(const std::string& speechData,
-                                         const std::string& format,
-                                         int rate,
-                                         int channel) 
-{
+std::string BaiduSpeechService::recognize(const std::string& speechData,
+                                       const std::string& format,
+                                       int rate,
+                                       int channel) {
     CURL* curl = curl_easy_init();
     if (!curl) return "";
 
@@ -104,14 +121,12 @@ std::string AISpeechProcessor::recognize(const std::string& speechData,
     return "";
 }
 
-// 语音合成（创建任务 -> 轮询 -> 返回 speech_url）
-std::string AISpeechProcessor::synthesize(const std::string& text,
-                                          const std::string& format,
-                                          const std::string& lang,
-                                          int speed,
-                                          int pitch,
-                                          int volume) 
-{
+std::string BaiduSpeechService::synthesize(const std::string& text,
+                                        const std::string& format,
+                                        const std::string& lang,
+                                        int speed,
+                                        int pitch,
+                                        int volume) {
     CURL* curl = nullptr;
     CURLcode res;
     std::string response;
@@ -182,10 +197,9 @@ std::string AISpeechProcessor::synthesize(const std::string& text,
     query["task_ids"] = json::array({task_id});
 
     // 轮询，上限可按需调整（例如超时 30 次）
-    const int max_loops = 60; // 最多等 60 秒（sleep 1s）
     int loops = 0;
-    while (loops++ < max_loops) {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+    while (loops++ < MAX_POLLING_LOOPS) {
+        std::this_thread::sleep_for(std::chrono::seconds(POLLING_INTERVAL_SECONDS));
 
         curl = curl_easy_init();
         if (!curl) break;
