@@ -1,10 +1,9 @@
 #pragma once
 
-#include "ChatServer.h"
-#include "http/HttpRequest.h"
-#include "http/HttpResponse.h"
 #include "utils/JsonUtil.h"
+
 #include "router/RouterHandler.h"
+#include "ChatServer.h"
 
 class ChatGetResultHandler : public http::router::RouterHandler
 {

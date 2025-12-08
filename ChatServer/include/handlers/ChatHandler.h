@@ -1,8 +1,8 @@
 #pragma once
 
-#include "router/RouterHandler.h"
 #include "utils/MysqlUtil.h"
 
+#include "router/RouterHandler.h"
 #include "ChatServer.h"
 
 class ChatHandler : public http::router::RouterHandler

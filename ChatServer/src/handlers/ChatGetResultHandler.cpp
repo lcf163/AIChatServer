@@ -1,6 +1,6 @@
 #include "handlers/ChatGetResultHandler.h"
-#include <chrono>
-#include <thread>
+// #include <chrono>
+// #include <thread>
 
 void ChatGetResultHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {

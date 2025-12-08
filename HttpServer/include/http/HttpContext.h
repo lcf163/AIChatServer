@@ -1,7 +1,5 @@
 #pragma once
 
-#include <iostream>
-
 #include <muduo/net/TcpServer.h>
 
 #include "HttpRequest.h"

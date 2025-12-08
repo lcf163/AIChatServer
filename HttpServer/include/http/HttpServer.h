@@ -23,9 +23,6 @@
 #include "ssl/SslConnection.h"
 #include "ssl/SslContext.h"
 
-class HttpRequest;
-class HttpResponse;
-
 namespace http
 {
 
