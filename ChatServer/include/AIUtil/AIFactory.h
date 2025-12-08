@@ -8,7 +8,6 @@
 #include <memory>
 #include <functional>
 #include <unordered_map>
-#include <string>
 
 #include "AIStrategy.h"
 
@@ -24,15 +23,14 @@ public:
 
 private:
     StrategyFactory() = default;
-    std::unordered_map<std::string, Creator> creators;
+    std::unordered_map<std::string, Creator> creators_;
 };
 
 template<typename T>
 struct StrategyRegister {
-    StrategyRegister(const std::string& name) {
-        StrategyFactory::instance().registerStrategy(name, [] {
-            std::shared_ptr<AIStrategy> instance = std::make_shared<T>();
-            return instance;
-            });
+    explicit StrategyRegister(const std::string& name) {
+        StrategyFactory::instance().registerStrategy(name, []() -> std::shared_ptr<AIStrategy> {
+            return std::make_shared<T>();
+        });
     }
 };
