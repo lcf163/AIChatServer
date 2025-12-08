@@ -55,9 +55,9 @@ void ChatSendHandler::handle(const http::HttpRequest& req, http::HttpResponse* r
 
 		// 更新会话时间戳
 		try {
-			std::string updateSessionSql = std::string("UPDATE chat_session SET updated_at = CURRENT_TIMESTAMP WHERE session_id = '")
-				+ sessionId + "'";
-			mysqlUtil_.executeUpdate(updateSessionSql);
+			// 使用参数化查询防止SQL注入
+			std::string updateSessionSql = "UPDATE chat_session SET updated_at = CURRENT_TIMESTAMP WHERE session_id = ?";
+			mysqlUtil_.executeUpdate(updateSessionSql, sessionId);
 		} catch (const std::exception& e) {
 			LOG_ERROR << "Failed to update session timestamp: " << e.what();
 			// 继续执行，即使数据库操作失败
@@ -94,13 +94,15 @@ void ChatSendHandler::handle(const http::HttpRequest& req, http::HttpResponse* r
 	catch (const std::exception& e)
 	{
 		json failureResp;
-		failureResp["status"] = "error";
-		failureResp["message"] = e.what();
+		failureResp["success"] = false;
+		failureResp["error"] = e.what();
 		std::string failureBody = failureResp.dump(4);
+
 		resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
 		resp->setCloseConnection(true);
 		resp->setContentType("application/json");
 		resp->setContentLength(failureBody.size());
 		resp->setBody(failureBody);
+		return;
 	}
 }

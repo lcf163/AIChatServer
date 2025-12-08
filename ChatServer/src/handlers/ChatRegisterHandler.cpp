@@ -38,11 +38,13 @@ void ChatRegisterHandler::handle(const http::HttpRequest& req, http::HttpRespons
 
 int ChatRegisterHandler::insertUser(const std::string& username, const std::string& password)
 {
-    if (!isUserExist(username))
-    {
-        std::string sql = "INSERT INTO users (username, password) VALUES (?, ?)";
-        mysqlUtil_.executeUpdate(sql, username, password);
-
+    // 使用 INSERT IGNORE 来避免竞态条件
+    // 如果用户名已存在，插入会被忽略，返回0行受影响
+    std::string sql = "INSERT IGNORE INTO users (username, password) VALUES (?, ?)";
+    int affectedRows = mysqlUtil_.executeUpdate(sql, username, password);
+    
+    // 如果插入成功（影响行数大于0），则获取用户ID
+    if (affectedRows > 0) {
         std::string sql2 = "SELECT id FROM users WHERE username = ?";
         auto res = mysqlUtil_.executeQuery(sql2, username);
         if (res->next())
@@ -50,6 +52,8 @@ int ChatRegisterHandler::insertUser(const std::string& username, const std::stri
             return res->getInt("id");
         }
     }
+    
+    // 插入失败或被忽略，说明用户名已存在
     return -1;
 }
 

@@ -46,10 +46,9 @@ void ChatSessionsHandler::handle(const http::HttpRequest& req, http::HttpRespons
             // 如果内存中没有会话数据，从数据库查询
             std::cout << "No sessions in memory, querying from database..." << std::endl;
             try {
-                std::string sql = std::string("SELECT session_id, title, created_at, updated_at FROM chat_session WHERE user_id = ")
-                    + std::to_string(userId) + " ORDER BY updated_at DESC";
+                std::string sql = "SELECT session_id, title, created_at, updated_at FROM chat_session WHERE user_id = ? ORDER BY updated_at DESC";
                 
-                sql::ResultSet* result = server_->mysqlUtil_.executeQuery(sql);
+                sql::ResultSet* result = server_->mysqlUtil_.executeQuery(sql, std::to_string(userId));
                 
                 if (result) {
                     while (result->next()) {

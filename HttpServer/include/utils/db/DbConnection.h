@@ -86,16 +86,7 @@ private:
     void bindParams(sql::PreparedStatement* stmt, int index, 
                    T&& value, Args&&... args) 
     {
-        stmt->setString(index, std::to_string(std::forward<T>(value)));
-        bindParams(stmt, index + 1, std::forward<Args>(args)...);
-    }
-    
-    // 特化 string 类型的参数绑定
-    template<typename... Args>
-    void bindParams(sql::PreparedStatement* stmt, int index, 
-                   const std::string& value, Args&&... args) 
-    {
-        stmt->setString(index, value);
+        stmt->setString(index, std::forward<T>(value));
         bindParams(stmt, index + 1, std::forward<Args>(args)...);
     }
 

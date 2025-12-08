@@ -34,14 +34,11 @@ void ChatHistoryHandler::handle(const http::HttpRequest& req, http::HttpResponse
 
         // 直接从数据库查询历史记录
         try {
-            // std::string sql = std::string("SELECT is_user, content FROM chat_message WHERE user_id = ") 
-            //     + std::to_string(userId) + " AND session_id = '" + sessionId + "' ORDER BY ts ASC, id ASC";
             std::string sql = "SELECT is_user, content FROM chat_message "
-                    "WHERE user_id = " + std::to_string(userId) + 
-                    " AND session_id = '" + sessionId + "' "
-                    "ORDER BY ts ASC, id ASC";
+                          "WHERE user_id = ? AND session_id = ? "
+                          "ORDER BY ts ASC, id ASC";
 
-            sql::ResultSet* result = server_->mysqlUtil_.executeQuery(sql);
+            sql::ResultSet* result = server_->mysqlUtil_.executeQuery(sql, std::to_string(userId), sessionId);
             
             if (result) {
                 while (result->next()) {

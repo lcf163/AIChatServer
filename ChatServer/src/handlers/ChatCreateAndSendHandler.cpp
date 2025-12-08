@@ -34,19 +34,16 @@ void ChatCreateAndSendHandler::handle(const http::HttpRequest& req, http::HttpRe
 		AISessionIdGenerator generator;
 		std::string sessionId = generator.generate();
 
-		// 持久化会话到数据库
-		try {
-			std::string insertSessionSql = std::string("INSERT INTO chat_session (user_id, username, session_id, title) VALUES (")
-				+ std::to_string(userId) + ", "
-				+ "'" + username + "', "
-				+ "'" + sessionId + "', "
-				+ "'新对话')";
-			
-			mysqlUtil_.executeUpdate(insertSessionSql);
-		} catch (const std::exception& e) {
-			std::cerr << "Failed to persist session to database: " << e.what() << std::endl;
-			// 继续执行，即使数据库操作失败
-		}
+		// 异步持久化会话到数据库，避免阻塞主线程
+		server_->businessThreadPool_->enqueue([this, userId, username, sessionId]() {
+			try {
+				// 使用参数化查询防止SQL注入
+				std::string insertSessionSql = "INSERT INTO chat_session (user_id, username, session_id, title) VALUES (?, ?, ?, ?)";
+				mysqlUtil_.executeUpdate(insertSessionSql, std::to_string(userId), username, sessionId, "新对话");
+			} catch (const std::exception& e) {
+				std::cerr << "Failed to persist session to database: " << e.what() << std::endl;
+			}
+		});
 
 		std::shared_ptr<AIHelper> AIHelperPtr;
 		{

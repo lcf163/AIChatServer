@@ -79,9 +79,12 @@ void ChatServer::loadSessionsFromDatabase() {
         
         delete result;
         std::cout << "Loaded " << sessionCount << " sessions (messages will load on demand)" << std::endl;
-        
-    } catch (const std::exception& e) {
-        std::cout << "Session loading skipped: " << e.what() << std::endl;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Error loading sessions from database: " << e.what() << std::endl;
+    }
+    catch (...) {
+        std::cerr << "Unknown error occurred while loading sessions from database" << std::endl;
     }
 }
 
@@ -100,12 +103,8 @@ std::shared_ptr<AIHelper> ChatServer::loadSessionOnDemand(int userId, const std:
     
     // 从数据库加载会话消息
     try {
-        std::string sql = "SELECT is_user, content, ts FROM chat_message "
-                    "WHERE user_id = " + std::to_string(userId) + 
-                    " AND session_id = '" + sessionId + "' "
-                    "ORDER BY ts ASC, id ASC";
-
-        sql::ResultSet* result = mysqlUtil_.executeQuery(sql);
+        std::string sql = "SELECT is_user, content, ts FROM chat_message WHERE user_id = ? AND session_id = ? ORDER BY ts ASC, id ASC";
+        sql::ResultSet* result = mysqlUtil_.executeQuery(sql, std::to_string(userId), sessionId);
 
         // 创建AIHelper实例
         auto helper = std::make_shared<AIHelper>();
@@ -138,11 +137,19 @@ std::shared_ptr<AIHelper> ChatServer::loadSessionOnDemand(int userId, const std:
         return helper;
         
     } catch (const std::exception& e) {
-        std::cerr << "Failed to load session " << sessionId << ": " << e.what() << std::endl;
-        
-        // 创建空会话作为fallback
+        std::cerr << "Error loading session messages from database: " << e.what() << std::endl;
+        // 出错时仍创建一个空的AIHelper实例
         auto helper = std::make_shared<AIHelper>();
         userSessions[sessionId] = helper;
+        updateLRUCache(userId, sessionId);
+        return helper;
+    }
+    catch (...) {
+        std::cerr << "Unknown error occurred while loading session messages from database" << std::endl;
+        // 出错时仍创建一个空的AIHelper实例
+        auto helper = std::make_shared<AIHelper>();
+        userSessions[sessionId] = helper;
+        updateLRUCache(userId, sessionId);
         return helper;
     }
 }
