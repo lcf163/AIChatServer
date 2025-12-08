@@ -25,14 +25,16 @@ void ChatSendHandler::handle(const http::HttpRequest& req, http::HttpResponse* r
 		std::string sessionId;
 		std::string modelType;
 
-		auto body = req.getBody();
-		if (!body.empty()) {
-			auto j = json::parse(body);
-			if (j.contains("question")) userQuestion = j["question"];
-			if (j.contains("sessionId")) sessionId = j["sessionId"];
-
-			modelType = j.contains("modelType") ? j["modelType"].get<std::string>() : "1";
+		json j;
+		if (!ParseJsonUtil::parseJsonFromBody(req, resp, j)) {
+			// 错误响应已经在parseJsonFromBody中设置
+			return;
 		}
+		
+		if (j.contains("question")) userQuestion = j["question"];
+		if (j.contains("sessionId")) sessionId = j["sessionId"];
+
+		modelType = j.contains("modelType") ? j["modelType"].get<std::string>() : "1";
 
 		std::shared_ptr<AIHelper> AIHelperPtr;
 		{

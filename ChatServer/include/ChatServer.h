@@ -15,13 +15,13 @@
 #include "http/HttpServer.h"
 #include "utils/MysqlUtil.h"
 #include "utils/FileUtil.h"
-#include "utils/JsonUtil.h"
 
+#include "utils/base64.h"
+#include "utils/MQManager.h"
+#include "utils/ThreadPool.h"
+#include "utils/ParseJsonUtil.h"
 #include "AIUtil/AISpeechProcessor.h"
 #include "AIUtil/AIHelper.h"
-#include "AIUtil/base64.h"
-#include "AIUtil/MQManager.h"
-#include "AIUtil/ThreadPool.h"
 
 class ChatLoginHandler;
 class ChatRegisterHandler;

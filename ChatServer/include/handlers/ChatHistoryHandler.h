@@ -1,7 +1,7 @@
 #pragma once
 
 #include "router/RouterHandler.h"
-
+#include "utils/ParseJsonUtil.h"
 #include "ChatServer.h"
 
 class ChatHistoryHandler : public http::router::RouterHandler

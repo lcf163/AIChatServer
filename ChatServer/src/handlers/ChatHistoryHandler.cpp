@@ -24,9 +24,13 @@ void ChatHistoryHandler::handle(const http::HttpRequest& req, http::HttpResponse
         std::string username = session->getValue("username");
 
         std::string sessionId;
-        auto body = req.getBody();
-        if (!body.empty()) {
-            auto j = json::parse(body);
+        json j;
+        if (!ParseJsonUtil::parseJsonFromBody(req, resp, j)) {
+            // 错误响应已经在parseJsonFromBody中设置
+            return;
+        }
+        
+        if (!j.empty()) {
             if (j.contains("sessionId")) sessionId = j["sessionId"];
         }
         

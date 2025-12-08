@@ -11,11 +11,11 @@
 
 #include "utils/JsonUtil.h"
 #include "utils/MysqlUtil.h"
+#include "utils/ThreadPool.h"
 
-#include "AIFactory.h"
 #include "AIConfig.h"
+#include "AIFactory.h"
 #include "AIToolRegistry.h"
-#include "ThreadPool.h"
 
 //封装curl访问模型
 class AIHelper {

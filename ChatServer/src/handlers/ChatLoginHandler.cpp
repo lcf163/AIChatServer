@@ -1,23 +1,15 @@
-#include "AIUtil/PasswordUtil.h"
 #include "handlers/ChatLoginHandler.h"
 
 void ChatLoginHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 { 
-    auto contentType = req.getHeader("Content-Type");
-    if (contentType.empty() || contentType != "application/json" || req.getBody().empty())
-    {
-        LOG_INFO << "content" << req.getBody();
-        resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
-        resp->setCloseConnection(true);
-        resp->setContentType("application/json");
-        resp->setContentLength(0);
-        resp->setBody("");
+    json parsed;
+    if (!ParseJsonUtil::parseJsonFromBody(req, resp, parsed)) {
+        // 错误响应已经在parseJsonFromBody中设置
         return;
     }
 
     try
     {
-        json parsed = json::parse(req.getBody());
         std::string username = parsed["username"];
         std::string password = parsed["password"];
 
@@ -107,7 +99,7 @@ int ChatLoginHandler::queryUserId(const std::string& username, const std::string
         std::string salt = res->getString("salt");
         
         // 验证密码
-        if (util::PasswordUtil::verifyPassword(password, salt, storedPassword))
+        if (PasswordUtil::verifyPassword(password, salt, storedPassword))
         {
             return id;
         }

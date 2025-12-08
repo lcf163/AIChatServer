@@ -50,14 +50,14 @@ json WeatherTool::execute(const json& args) const {
     std::string response;
 
     if (!curl) {
-        return json{ {"error", "Failed to init CURL"} };
+        return json{ {"error", "网络请求失败，请稍后再试"} };
     }
 
     // 设置CURL选项
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L); // 5秒超时
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L); // 10秒超时
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
 

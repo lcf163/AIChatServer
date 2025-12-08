@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "utils/JsonUtil.h"
+
 #include "AIUtil/AIConfig.h"
 
 class AIStrategy {

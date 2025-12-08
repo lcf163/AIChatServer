@@ -23,9 +23,13 @@ void ChatCreateAndSendHandler::handle(const http::HttpRequest& req, http::HttpRe
 		std::string userQuestion;
 		std::string modelType;
 
-		auto body = req.getBody();
-		if (!body.empty()) {
-			auto j = json::parse(body);
+		json j;
+		if (!ParseJsonUtil::parseJsonFromBody(req, resp, j)) {
+			// 错误响应已经在parseJsonFromBody中设置
+			return;
+		}
+		
+		if (!j.empty()) {
 			if (j.contains("question")) userQuestion = j["question"];
 
 			modelType = j.contains("modelType") ? j["modelType"].get<std::string>() : "1";

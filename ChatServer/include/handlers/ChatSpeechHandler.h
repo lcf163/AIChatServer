@@ -1,7 +1,9 @@
 #pragma once
 
 #include "router/RouterHandler.h"
-
+#include "utils/ParseJsonUtil.h"
+#include "AIUtil/AISpeechProcessor.h"
+#include "AIUtil/AIConfig.h"
 #include "ChatServer.h"
 
 class ChatSpeechHandler : public http::router::RouterHandler

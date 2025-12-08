@@ -1,8 +1,10 @@
 #pragma once
 
-#include "router/RouterHandler.h"
 #include "utils/MysqlUtil.h"
-#include "utils/JsonUtil.h"
+
+#include "router/RouterHandler.h"
+#include "utils/PasswordUtil.h"
+#include "utils/ParseJsonUtil.h"
 #include "ChatServer.h"
 
 class ChatRegisterHandler : public http::router::RouterHandler

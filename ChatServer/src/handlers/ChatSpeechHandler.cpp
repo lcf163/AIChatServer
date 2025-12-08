@@ -1,15 +1,17 @@
 #include "handlers/ChatSpeechHandler.h"
-#include "AIUtil/AISpeechProcessor.h"
-#include "AIUtil/AIConfig.h"
 
 void ChatSpeechHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {
     try
     {
         std::string text = "欢迎使用AI智能助手";
-        auto body = req.getBody();
-        if (!body.empty()) {
-            auto j = json::parse(body);
+        json j;
+        if (!ParseJsonUtil::parseJsonFromBody(req, resp, j)) {
+            // 错误响应已经在parseJsonFromBody中设置
+            return;
+        }
+        
+        if (!j.empty()) {
             if (j.contains("text")) text = j["text"];
         }
 

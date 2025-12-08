@@ -1,9 +1,14 @@
-#include "AIUtil/PasswordUtil.h"
+
 #include "handlers/ChatRegisterHandler.h"
 
 void ChatRegisterHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {
-    json parsed = json::parse(req.getBody());
+    json parsed;
+    if (!ParseJsonUtil::parseJsonFromBody(req, resp, parsed)) {
+        // 错误响应已经在parseJsonFromBody中设置
+        return;
+    }
+    
     std::string username = parsed["username"];
     std::string password = parsed["password"];
 
@@ -40,10 +45,10 @@ void ChatRegisterHandler::handle(const http::HttpRequest& req, http::HttpRespons
 int ChatRegisterHandler::insertUser(const std::string& username, const std::string& password)
 {
     // 生成盐值
-    std::string salt = util::PasswordUtil::generateSalt();
+    std::string salt = PasswordUtil::generateSalt();
     
     // 使用PBKDF2算法对密码进行哈希
-    std::string hashedPassword = util::PasswordUtil::hashPassword(password, salt);
+    std::string hashedPassword = PasswordUtil::hashPassword(password, salt);
     
     // 使用 INSERT IGNORE 来避免竞态条件
     // 如果用户名已存在，插入会被忽略，返回0行受影响

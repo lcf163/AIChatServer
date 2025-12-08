@@ -3,8 +3,8 @@
 #include <thread>
 #include <future>
 
+#include "utils/MQManager.h"
 #include "AIUtil/AIHelper.h"
-#include "AIUtil/MQManager.h"
 
 enum modelType {
     AliType = 1,

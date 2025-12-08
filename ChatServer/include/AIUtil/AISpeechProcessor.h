@@ -11,7 +11,7 @@
 
 #include "utils/JsonUtil.h"
 
-#include "base64.h"
+#include "utils/base64.h"
 
 class AISpeechProcessor {
 public:
