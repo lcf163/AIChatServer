@@ -6,8 +6,9 @@
 #include <muduo/base/Logging.h>
 #include <muduo/net/EventLoop.h>
 
-#include "ChatServer.h"
+#include "utils/JsonUtil.h"
 #include "AIUtil/AIConfig.h"
+#include "ChatServer.h"
 
 // 工作线程绑定的函数
 void executeMysql(const std::string sql_with_params) {
@@ -16,59 +17,43 @@ void executeMysql(const std::string sql_with_params) {
     
     http::MysqlUtil mysqlUtil_;
     
-    // 解析SQL和参数
-    size_t pos = sql_with_params.find("|~|");
-    if (pos != std::string::npos) {
-        // 分离SQL语句和参数
-        std::string sql = sql_with_params.substr(0, pos);
-        std::string params_str = sql_with_params.substr(pos + 3);
-
-        // 分割参数
-        std::vector<std::string> params;
-        size_t start = 0;
-        size_t end = 0;
-        while ((end = params_str.find("|~|", start)) != std::string::npos) {
-            params.push_back(params_str.substr(start, end - start));
-            start = end + 3;
-        }
-        params.push_back(params_str.substr(start));
-
-        // 根据参数数量执行相应的executeUpdate
-        try {
+    try {
+        // 尝试解析为JSON格式（新格式）
+        json messageJson = json::parse(sql_with_params);
+        
+        if (messageJson.contains("sql") && messageJson.contains("params")) {
+            std::string sql = messageJson["sql"];
+            json params = messageJson["params"];
+            
+            // 根据参数数量执行相应的executeUpdate
             switch (params.size()) {
                 case 1:
-                    mysqlUtil_.executeUpdate(sql, params[0]);
+                    mysqlUtil_.executeUpdate(sql, params[0].get<std::string>());
                     break;
                 case 2:
-                    mysqlUtil_.executeUpdate(sql, params[0], params[1]);
+                    mysqlUtil_.executeUpdate(sql, params[0].get<std::string>(), params[1].get<std::string>());
                     break;
                 case 3:
-                    mysqlUtil_.executeUpdate(sql, params[0], params[1], params[2]);
+                    mysqlUtil_.executeUpdate(sql, params[0].get<std::string>(), params[1].get<std::string>(), params[2].get<std::string>());
                     break;
                 case 4:
-                    mysqlUtil_.executeUpdate(sql, params[0], params[1], params[2], params[3]);
+                    mysqlUtil_.executeUpdate(sql, params[0].get<std::string>(), params[1].get<std::string>(), params[2].get<std::string>(), params[3].get<std::string>());
                     break;
                 case 5:
-                    mysqlUtil_.executeUpdate(sql, params[0], params[1], params[2], params[3], params[4]);
+                    mysqlUtil_.executeUpdate(sql, params[0].get<std::string>(), params[1].get<std::string>(), params[2].get<std::string>(), params[3].get<std::string>(), params[4].get<std::string>());
                     break;
                 case 6:
-                    mysqlUtil_.executeUpdate(sql, params[0], params[1], params[2], params[3], params[4], params[5]);
+                    mysqlUtil_.executeUpdate(sql, params[0].get<std::string>(), params[1].get<std::string>(), params[2].get<std::string>(), params[3].get<std::string>(), params[4].get<std::string>(), params[5].get<std::string>());
                     break;
                 default:
-                    // 如果参数数量不匹配，则直接执行原始SQL（向后兼容）
-                    mysqlUtil_.executeUpdate(sql_with_params);
+                    LOG_ERROR << "Unsupported number of parameters: " << params.size();
                     break;
             }
-        } catch (const std::exception& e) {
-            LOG_ERROR << "Error executing SQL: " << e.what();
+        } else {
+            LOG_ERROR << "Invalid JSON format: missing sql or params";
         }
-    } else {
-        // 如果没有找到分隔符，则直接执行原始SQL（向后兼容）
-        try {
-            mysqlUtil_.executeUpdate(sql_with_params);
-        } catch (const std::exception& e) {
-            LOG_ERROR << "Error executing SQL: " << e.what();
-        }
+    } catch (const std::exception& e) {
+        LOG_ERROR << "Error parsing JSON message: " << e.what() << ", message: " << sql_with_params;
     }
 }
 

@@ -370,13 +370,19 @@ std::string AIHelper::escapeString(const std::string& input) {
 }
 
 void AIHelper::pushMessageToMysql(int userId, const std::string& userName, bool is_user, const std::string& userInput, long long ms, std::string sessionId) {
-    // 构造带参数的SQL消息
-    std::string sql = "INSERT INTO chat_message (user_id, username, session_id, is_user, content, ts) VALUES (?, ?, ?, ?, ?, ?)";
+    // 构造JSON格式的消息
+    json messageJson;
+    messageJson["sql"] = "INSERT INTO chat_message (user_id, username, session_id, is_user, content, ts) VALUES (?, ?, ?, ?, ?, ?)";
+    messageJson["params"] = json::array();
+    messageJson["params"].push_back(std::to_string(userId));
+    messageJson["params"].push_back(userName);
+    messageJson["params"].push_back(sessionId);
+    messageJson["params"].push_back(std::to_string(is_user ? 1 : 0));
+    messageJson["params"].push_back(userInput);  // userInput可能包含特殊字符，但通过参数化查询处理
+    messageJson["params"].push_back(std::to_string(ms));
     
-    // 构造参数列表，使用特殊分隔符分隔SQL和参数
-    std::string params = std::to_string(userId) + "|~|" + userName + "|~|" + sessionId + "|~|" + 
-                        std::to_string(is_user ? 1 : 0) + "|~|" + userInput + "|~|" + std::to_string(ms);
-    std::string message = sql + "|~|" + params;  // 使用|~|作为分隔符
+    // 将JSON序列化为字符串发送到消息队列
+    std::string message = messageJson.dump();
     
     // 消息队列异步执行mysql操作，用于流量削峰与解耦逻辑
     MQManager::instance().publish("sql_queue", message);
