@@ -2,7 +2,7 @@
 
 #include <memory>
 #include <string>
-#include <mutex>
+// #include <mutex>
 
 #include <cppconn/connection.h>
 #include <cppconn/prepared_statement.h>
@@ -38,7 +38,7 @@ public:
     template<typename... Args>
     sql::ResultSet* executeQuery(const std::string& sql, Args&&... args)
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        // std::lock_guard<std::mutex> lock(mutex_);
         try 
         {
             // 直接创建新的预处理语句，不使用缓存
@@ -58,7 +58,7 @@ public:
     template<typename... Args>
     int executeUpdate(const std::string& sql, Args&&... args)
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        // std::lock_guard<std::mutex> lock(mutex_);
         try 
         {
             // 直接创建新的预处理语句，不使用缓存
@@ -95,7 +95,7 @@ private:
     std::string                      user_;
     std::string                      password_;
     std::string                      database_;
-    std::mutex                       mutex_;
+    // std::mutex                       mutex_;
 };
 
 } // namespace db

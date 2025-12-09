@@ -161,7 +161,7 @@ void DbConnection::reconnect()
 
 void DbConnection::cleanup() 
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    // std::lock_guard<std::mutex> lock(mutex_);
     try 
     {
         if (conn_) 
