@@ -65,7 +65,7 @@ void ChatServer::loadSessionsFromDatabase() {
     
     try {
         std::string sql = "SELECT user_id, session_id FROM chat_session ORDER BY user_id, created_at";
-        sql::ResultSet* result = mysqlUtil_.executeQuery(sql);
+        std::unique_ptr<sql::ResultSet> result(mysqlUtil_.executeQuery(sql));
         
         if (!result) {
             LOG_INFO << "No sessions found in database (first startup?)";
@@ -89,7 +89,7 @@ void ChatServer::loadSessionsFromDatabase() {
             sessionCount++;
         }
         
-        delete result;
+        // unique_ptr会自动释放资源，不再需要手动delete
         LOG_INFO << "Loaded " << sessionCount << " sessions (messages will load on demand)";
     }
     catch (const std::exception& e) {
@@ -116,7 +116,7 @@ std::shared_ptr<AIHelper> ChatServer::loadSessionOnDemand(int userId, const std:
     // 从数据库加载会话消息
     try {
         std::string sql = "SELECT is_user, content, ts FROM chat_message WHERE user_id = ? AND session_id = ? ORDER BY ts ASC, id ASC";
-        sql::ResultSet* result = mysqlUtil_.executeQuery(sql, std::to_string(userId), sessionId);
+        std::unique_ptr<sql::ResultSet> result(mysqlUtil_.executeQuery(sql, std::to_string(userId), sessionId));
 
         // 创建AIHelper实例
         auto helper = std::make_shared<AIHelper>();
@@ -130,32 +130,32 @@ std::shared_ptr<AIHelper> ChatServer::loadSessionOnDemand(int userId, const std:
                 helper->restoreMessage(content, ts);
                 messageCount++;
             }
-            delete result;
+            // unique_ptr会自动释放资源，不再需要手动delete
         }
-        
-        // 添加到内存
-        userSessions[sessionId] = helper;
-        
-        // 更新会话列表
-        auto& sessionList = sessionsIdsMap[userId];
-        if (std::find(sessionList.begin(), sessionList.end(), sessionId) == sessionList.end()) {
-            sessionList.push_back(sessionId);
+            
+            // 添加到内存
+            userSessions[sessionId] = helper;
+            
+            // 更新会话列表
+            auto& sessionList = sessionsIdsMap[userId];
+            if (std::find(sessionList.begin(), sessionList.end(), sessionId) == sessionList.end()) {
+                sessionList.push_back(sessionId);
+            }
+            
+            // 加载成功后，更新LRU缓存
+            updateLRUCache(userId, sessionId);
+            
+            LOG_INFO << "Loaded " << messageCount << " messages for session " << sessionId;
+            return helper;
+            
+        } catch (const std::exception& e) {
+            LOG_ERROR << "Error loading session messages from database: " << e.what();
+            // 出错时仍创建一个空的AIHelper实例
+            auto helper = std::make_shared<AIHelper>();
+            userSessions[sessionId] = helper;
+            updateLRUCache(userId, sessionId);
+            return helper;
         }
-        
-        // 加载成功后，更新LRU缓存
-        updateLRUCache(userId, sessionId);
-        
-        LOG_INFO << "Loaded " << messageCount << " messages for session " << sessionId;
-        return helper;
-        
-    } catch (const std::exception& e) {
-        LOG_ERROR << "Error loading session messages from database: " << e.what();
-        // 出错时仍创建一个空的AIHelper实例
-        auto helper = std::make_shared<AIHelper>();
-        userSessions[sessionId] = helper;
-        updateLRUCache(userId, sessionId);
-        return helper;
-    }
 
 }
 

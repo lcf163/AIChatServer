@@ -49,7 +49,7 @@ void ChatSessionsHandler::handle(const http::HttpRequest& req, http::HttpRespons
             try {
                 std::string sql = "SELECT session_id, title, created_at, updated_at FROM chat_session WHERE user_id = ? ORDER BY updated_at DESC";
                 
-                sql::ResultSet* result = server_->mysqlUtil_.executeQuery(sql, std::to_string(userId));
+                std::unique_ptr<sql::ResultSet> result(server_->mysqlUtil_.executeQuery(sql, std::to_string(userId)));
                 
                 if (result) {
                     while (result->next()) {
@@ -64,8 +64,7 @@ void ChatSessionsHandler::handle(const http::HttpRequest& req, http::HttpRespons
                         std::lock_guard<std::mutex> lock(server_->mutexForSessionsId);
                         server_->sessionsIdsMap[userId].push_back(result->getString("session_id"));
                     }
-                    delete result;
-                    result = nullptr;
+                    // unique_ptr会自动释放资源，不再需要手动delete
                     LOG_INFO << "Loaded " << sessionArray.size() << " sessions from database";
                 }
             } catch (const std::exception& e) {

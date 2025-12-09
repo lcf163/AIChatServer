@@ -43,7 +43,7 @@ void ChatHistoryHandler::handle(const http::HttpRequest& req, http::HttpResponse
                           "WHERE user_id = ? AND session_id = ? "
                           "ORDER BY ts ASC, id ASC";
 
-            sql::ResultSet* result = server_->mysqlUtil_.executeQuery(sql, std::to_string(userId), sessionId);
+            std::unique_ptr<sql::ResultSet> result(server_->mysqlUtil_.executeQuery(sql, std::to_string(userId), sessionId));
             
             if (result) {
                 while (result->next()) {
@@ -52,8 +52,7 @@ void ChatHistoryHandler::handle(const http::HttpRequest& req, http::HttpResponse
                     msgJson["content"] = result->getString("content");
                     historyArray.push_back(msgJson);
                 }
-                delete result;
-                result = nullptr;
+                // unique_ptr会自动释放资源，不再需要手动delete
                 LOG_INFO << "Found " << historyArray.size() << " messages for session " << sessionId;
             }
         } catch (const std::exception& e) {
