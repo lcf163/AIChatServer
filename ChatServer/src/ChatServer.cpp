@@ -247,3 +247,44 @@ void ChatServer::packageResp(const std::string& version, http::HttpResponse::Htt
 	resp->setContentLength(contentLen);
 	resp->setBody(body);
 }
+
+void ChatServer::addSSEConnection(const std::string& sessionId, const muduo::net::TcpConnectionPtr& conn)
+{
+    std::lock_guard<std::mutex> lock(sseMutex_);
+    sseConnections_[sessionId] = conn;
+}
+
+void ChatServer::removeSSEConnection(const std::string& sessionId)
+{
+    std::lock_guard<std::mutex> lock(sseMutex_);
+    sseConnections_.erase(sessionId);
+}
+
+void ChatServer::sendSSEData(const std::string& sessionId, const std::string& data, const std::string& eventType)
+{
+    muduo::net::TcpConnectionPtr conn;
+    {
+        std::lock_guard<std::mutex> lock(sseMutex_);
+        auto it = sseConnections_.find(sessionId);
+        if (it != sseConnections_.end()) {
+            conn = it->second;
+        }
+    }
+
+    if (conn && conn->connected()) {
+        conn->getLoop()->runInLoop([conn, data, eventType]() {
+            std::ostringstream oss;
+            oss << "event: " << eventType << "\n";
+            
+            if (eventType == "result") {
+                json j;
+                j["result"] = data; 
+                oss << "data: " << j.dump() << "\n\n";
+            } else {
+                oss << "data: " << data << "\n\n";
+            }
+            
+            conn->send(oss.str());
+        });
+    }
+}

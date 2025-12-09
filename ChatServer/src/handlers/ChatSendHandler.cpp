@@ -66,22 +66,36 @@ void ChatSendHandler::handle(const http::HttpRequest& req, http::HttpResponse* r
 			// 继续执行，即使数据库操作失败
 		}
 
+        // 定义流式回调：收到一个字，就发给前端
+        auto streamCallback = [this, sessionId](const std::string& chunk) {
+            // chunk 是解析好的纯文本
+            if (!chunk.empty()) {
+                server_->sendSSEData(sessionId, chunk, "result");
+            }
+        };
+
 		// 使用线程池异步处理AI请求，真正避免阻塞IO线程
-		auto future = AIHelperPtr->chatAsync(server_->businessThreadPool_, userId, username, sessionId, userQuestion, modelType);
+		auto future = AIHelperPtr->chatAsync(server_->businessThreadPool_, userId, username, sessionId, userQuestion, modelType, streamCallback);
 		
 		// 在另一个线程中等待结果并处理
 		server_->businessThreadPool_->enqueue([this, sessionId, userId, future = std::move(future)]() mutable {
 			try {
 				std::string result = future.get();
-				// 通过WebSocket推送结果给客户端
+				// 推送结果给客户端 (这里是 SSE)
 				std::lock_guard<std::mutex> lock(server_->mutexForChatResults);
 				server_->chatResults[sessionId] = result;
+                
+                // 【关键】发送结束信号给前端
+                server_->sendSSEData(sessionId, "{\"status\":\"done\"}", "end");
+                
 			} catch (const std::exception& e) {
 				LOG_ERROR << "AI task failed for session " << sessionId << ": " << e.what();
+                // 发送错误事件
+                server_->sendSSEData(sessionId, "{\"error\":\"Processing Failed\"}", "timeout");
 			}
 		});
 
-		// 立即返回成功响应，前端需轮询结果
+		// 立即返回成功响应，前端通过 SSE 接收后续数据
 		json successResp;
 		successResp["success"] = true;
 		successResp["message"] = "AI processing started";

@@ -254,6 +254,21 @@
                 transform: translateY(0);
             }
         }
+        
+        /* 打字机光标动画 */
+        .typing-cursor {
+            display: inline-block;
+            width: 4px;
+            height: 16px;
+            background-color: #333;
+            margin-left: 2px;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -304,6 +319,11 @@
         // Server-Sent Events source
         let sseSource = null; 
         let currentSSESessionId = null;
+        let typingTimer = null;  // 用于打字机效果的定时器
+        let typingText = '';     // 当前正在打印的文本缓冲区
+        let typingIndex = 0;     // 当前打印到的位置
+        let currentMessageDiv = null; // 当前显示打字机效果的消息div
+        let accumulatedText = ''; // 累积的已确认显示文本
         
         // 初始化SSE连接
         function initSSE(sessionId) {
@@ -327,8 +347,8 @@
             
             sseSource.addEventListener('result', function(event) {
                 try {
-                    const data = JSON.parse(event.data);
-                    handleAIResult(sessionId, data.result);
+                    // 处理流式响应数据
+                    handleAIResult(sessionId, event.data);
                 } catch (e) {
                     console.error('处理SSE消息时出错:', e);
                 }
@@ -345,6 +365,8 @@
             
             sseSource.addEventListener('end', function(event) {
                 console.log('SSE连接结束');
+                // SSE结束，我们不强制停止打字机，让它把缓冲区打完
+                // 这里只关闭连接
                 if (sseSource) {
                     sseSource.close();
                     sseSource = null;
@@ -355,6 +377,7 @@
             sseSource.addEventListener('timeout', function(event) {
                 console.log('SSE连接超时');
                 appendMessage('assistant', '[错误] AI处理超时，请稍后重试');
+                stopTypingAndCleanUp();
                 if (sseSource) {
                     sseSource.close();
                     sseSource = null;
@@ -364,21 +387,107 @@
             
             sseSource.onerror = function(event) {
                 console.error('SSE错误:', event);
-                appendMessage('assistant', '[错误] 连接异常，请稍后重试');
-                if (sseSource) {
-                    sseSource.close();
-                    sseSource = null;
-                    currentSSESessionId = null;
+                // 只有在真的连接断开且无法恢复时报错，避免正常重连时的干扰
+                if (sseSource && sseSource.readyState === EventSource.CLOSED) {
+                     appendMessage('assistant', '[错误] 连接异常，请稍后重试');
+                     stopTypingAndCleanUp();
+                     sseSource = null;
+                     currentSSESessionId = null;
                 }
             };
+        }
+
+        // 辅助函数：停止打字并清理状态（用于出错或切换会话）
+        function stopTypingAndCleanUp() {
+            if (typingTimer) {
+                clearTimeout(typingTimer);
+                typingTimer = null;
+            }
+            accumulatedText = '';
+            typingText = '';
+            typingIndex = 0;
+            currentMessageDiv = null;
+        }
+        
+        // 打字机效果函数
+        function typeWriter() {
+            if (typingIndex < typingText.length) {
+                // 获取当前应该显示的文本
+                const currentChunk = typingText.substring(0, typingIndex + 1);
+                // 渲染：已归档文本 + 正在打印的文本片段
+                const safeHtml = DOMPurify.sanitize(marked.parse(accumulatedText + currentChunk));
+                
+                if (currentMessageDiv) {
+                    currentMessageDiv.innerHTML = `<div style="display:flex; align-items:center; gap:10px;"><div style="flex:1;"><b>AI:</b><br>${safeHtml}<span class="typing-cursor">|</span></div><button class="tts-btn" style="display:none;">🔊</button></div>`;
+                    // 自动滚动到底部
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+                
+                typingIndex++;
+                typingTimer = setTimeout(typeWriter, 20); // 每20毫秒打印一个字符
+            } else {
+                // 当前缓冲区文本打印完毕
+                accumulatedText += typingText; // 将缓冲区内容归档
+                typingText = '';               // 清空缓冲区
+                typingIndex = 0;               // 重置索引
+                
+                // 此时打字机暂停，等待新数据
+                // 将定时器置空，表示当前没有活跃的打字循环
+                typingTimer = null; 
+                
+                // 更新TTS按钮状态（显示最终文本）
+                if (currentMessageDiv) {
+                    const ttsButton = currentMessageDiv.querySelector('.tts-btn');
+                    const finalHtml = DOMPurify.sanitize(marked.parse(accumulatedText));
+                    // 移除光标
+                    currentMessageDiv.innerHTML = `<div style="display:flex; align-items:center; gap:10px;"><div style="flex:1;"><b>AI:</b><br>${finalHtml}</div><button class="tts-btn" onclick="playTTS(\`${accumulatedText.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)">🔊</button></div>`;
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+            }
         }
         
         // 处理AI结果
         function handleAIResult(sessionId, result) {
             if (sessionId === currentSessionId) {
-                appendMessage('assistant', result);
+                let content = '';
+                // 检查是否为JSON格式
+                if (result.startsWith('{')) {
+                    try {
+                        const data = JSON.parse(result);
+                        content = data.result || '';
+                    } catch (e) {
+                        console.error('解析JSON失败:', e);
+                        content = result; 
+                    }
+                } else {
+                    content = result;
+                }
+
+                // 如果有内容，追加到打字机缓冲区
+                if (content) {
+                    // 1. 确保有显示容器
+                    if (!currentMessageDiv) {
+                        currentMessageDiv = appendMessage('assistant', '', true);
+                    }
+                    
+                    // 2. 将新内容追加到待打印缓冲区
+                    typingText += content;
+                    
+                    // 3. 如果打字机当前是停止状态（没有定时器在跑），则启动它
+                    // 关键修复：不要重置 typingIndex 或 clearTimeout，否则会造成回退重打
+                    if (!typingTimer) {
+                        typeWriter();
+                    }
+                }
+                
+                // 同步更新内存中的会话历史（可选，用于切换回来时显示完整内容）
                 if (sessions[sessionId]) {
-                    sessions[sessionId].messages.push({ role: 'assistant', content: result });
+                    const lastMessage = sessions[sessionId].messages[sessions[sessionId].messages.length - 1];
+                    if (lastMessage && lastMessage.role === 'assistant') {
+                        lastMessage.content += content;
+                    } else {
+                        sessions[sessionId].messages.push({ role: 'assistant', content: content });
+                    }
                 }
             }
         }
@@ -392,17 +501,29 @@
             } catch (err) { console.error(err); alert('[错误] 请求语音接口失败'); }
         }
 
-        function appendMessage(role, content) {
+        function appendMessage(role, content, isTyping = false) {
             const msgDiv = document.createElement('div');
             msgDiv.classList.add('message', role);
-            const safeHtml = DOMPurify.sanitize(marked.parse(content));
-            const escapedContent = content.replace(/`/g, '\\`').replace(/\$/g, '\\$');
-            msgDiv.innerHTML = `<div style="display:flex; align-items:center; gap:10px;"><div style="flex:1;"><b>${role === 'user' ? '你' : 'AI'}:</b><br>${safeHtml}</div><button class="tts-btn" onclick="playTTS(\`${escapedContent}\`)">🔊</button></div>`;
+            
+            if (isTyping) {
+                // 为打字机效果创建特殊的空消息
+                msgDiv.innerHTML = `<div style="display:flex; align-items:center; gap:10px;"><div style="flex:1;"><b>AI:</b><br><span class="typing-cursor">|</span></div><button class="tts-btn" style="display:none;">🔊</button></div>`;
+            } else {
+                // 显示普通消息（历史记录回显时用）
+                const safeHtml = DOMPurify.sanitize(marked.parse(content));
+                msgDiv.innerHTML = `<div style="display:flex; align-items:center; gap:10px;"><div style="flex:1;"><b>${role === 'user' ? 'You' : 'AI'}:</b><br>${safeHtml}</div><button class="tts-btn" onclick="playTTS(\`${content.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)">🔊</button></div>`;
+            }
+            
             chatContainer.appendChild(msgDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
+            return msgDiv;
         }
 
-        function clearMessages() { chatContainer.innerHTML = ''; }
+        function clearMessages() { 
+            chatContainer.innerHTML = ''; 
+            // 切换或清空时，必须重置打字机状态
+            stopTypingAndCleanUp();
+        }
 
         function renderSessionList() {
             sessionList.innerHTML = '';
@@ -417,7 +538,17 @@
         }
 
         async function switchSession(id) {
-            currentSessionId = String(id); tempSession = false; clearMessages();
+            currentSessionId = String(id); 
+            tempSession = false; 
+            clearMessages(); // 这里会调用 stopTypingAndCleanUp
+            
+            // 切换会话时，关闭旧的SSE连接
+            if (sseSource) {
+                sseSource.close();
+                sseSource = null;
+                currentSSESessionId = null;
+            }
+
             if (!sessions[id].messages || sessions[id].messages.length === 0) {
                 try {
                     const res = await fetch('/chat/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: currentSessionId }) });
@@ -444,6 +575,9 @@
             if (!question) return;
 
             appendMessage('user', question);
+
+            // 发送新问题前，重置打字机相关变量，防止上一次未结束的状态干扰
+            stopTypingAndCleanUp();
 
             if (tempSession) {
                 try {

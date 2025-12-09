@@ -123,6 +123,7 @@ public:
     const ApiKeysConfig& getApiKeysConfig() const { return apiKeysConfig_; }
     const ModelConfig& getModelConfig() const { return modelConfig_; }
     SpeechServiceProvider getSpeechServiceProvider() const { return speechServiceProvider_; }
+    const AIToolRegistry& getToolRegistry() const { return toolRegistry_; }
 
 private:
     AIConfig(); // 私有构造函数

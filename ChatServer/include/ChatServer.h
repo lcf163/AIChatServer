@@ -58,6 +58,14 @@ public:
 	// 添加获取server指针的方法，供SSEChatHandler使用
 	ChatServer* getServer() { return this; }
 	
+	// SSE 连接管理接口
+	void addSSEConnection(const std::string& sessionId, const muduo::net::TcpConnectionPtr& conn);
+	void removeSSEConnection(const std::string& sessionId);
+	
+	// 发送 SSE 数据 (线程安全，内部会切到 IO 线程)
+	// eventType 默认为 "result"
+	void sendSSEData(const std::string& sessionId, const std::string& data, const std::string& eventType = "result");
+	
 private:
 	friend class ChatLoginHandler;
 	friend class ChatRegisterHandler;
@@ -110,6 +118,10 @@ private:
 	// 存储聊天结果的容器
 	std::unordered_map<std::string, std::string> chatResults;
 	std::mutex mutexForChatResults;
+	
+	// SSE 连接映射表
+	std::unordered_map<std::string, muduo::net::TcpConnectionPtr> sseConnections_;
+	std::mutex sseMutex_;
 	
 	// LRU Cache相关成员
 	std::list<std::pair<int, std::string>> lruCacheList_;

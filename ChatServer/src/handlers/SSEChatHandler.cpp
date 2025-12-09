@@ -2,13 +2,8 @@
 #include <muduo/base/Logging.h>
 #include <muduo/net/Buffer.h>
 #include <sstream>
-#include <chrono>
-#include <thread>
 
-// 超时检查次数（每次0.5秒，60次共30秒）
-constexpr int SSE_TIMEOUT_CHECKS = 60;
-
-// 初始化静态成员
+// 静态成员变量定义
 std::unordered_map<std::string, int> SSEChatHandler::timeoutCounters_;
 std::mutex SSEChatHandler::timeoutMutex_;
 
@@ -32,12 +27,6 @@ void SSEChatHandler::handle(const http::HttpRequest& req, http::HttpResponse* re
             return;
         }
 
-        // 初始化超时计数器
-        {
-            std::lock_guard<std::mutex> lock(timeoutMutex_);
-            timeoutCounters_[sessionId] = SSE_TIMEOUT_CHECKS;
-        }
-
         // 设置SSE响应头
         resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
         resp->setCloseConnection(false);
@@ -49,21 +38,19 @@ void SSEChatHandler::handle(const http::HttpRequest& req, http::HttpResponse* re
         
         // 启用流式响应模式
         resp->setStreamingMode(true);
-        resp->setStreamWriteCallback([this](muduo::net::TcpConnectionPtr conn, http::HttpResponse* r) {
-            return streamWriteCallback(conn, r, server_);
+        resp->setStreamWriteCallback([this, sessionId](muduo::net::TcpConnectionPtr conn, http::HttpResponse* r) {
+            // 注册连接
+            server_->addSSEConnection(sessionId, conn);
+            
+            // 发送初始连接确认事件
+            std::ostringstream initData;
+            initData << "event: connected\n";
+            initData << "data: {\"sessionId\": \"" << sessionId << "\", \"status\": \"connected\"}\n\n";
+            
+            conn->send(initData.str());
+            
+            return false; // 返回false停止HttpServer的驱动循环，但连接保持打开
         });
-        
-        // 存储会话ID到响应对象中（可以通过某种方式传递，这里简化处理）
-        resp->addHeader("X-SSE-Session-ID", sessionId);
-        
-        // 发送初始连接确认事件
-        std::ostringstream initData;
-        initData << "event: connected\n";
-        initData << "data: {\"sessionId\": \"" << sessionId << "\", \"status\": \"connected\"}\n\n";
-        
-        muduo::net::Buffer buf;
-        buf.append(initData.str());
-        // 注意：初始数据将在onRequest中发送
     }
     catch (const std::exception& e)
     {
@@ -105,20 +92,29 @@ bool SSEChatHandler::streamWriteCallback(muduo::net::TcpConnectionPtr conn, http
         eventData << "data: " << resultData.dump() << "\n\n";
         buf.append(eventData.str());
         
-        // 发送结束事件
-        buf.append("event: end\n");
-        buf.append("data: {\"message\": \"connection closing\"}\n\n");
+        if (conn->connected()) {
+            conn->send(&buf);
+        }
         
+        // 继续流式传输，等待更多内容或结束标记
+        return true;
+    }
+    
+    // 检查连接是否已经断开或者需要关闭
+    if (!conn || !conn->connected()) {
         // 清理超时计数器
         {
             std::lock_guard<std::mutex> lock(timeoutMutex_);
             timeoutCounters_.erase(sessionId);
         }
         
-        if (conn->connected()) {
-            conn->send(&buf);
+        // 清理会话连接映射
+        {
+            std::lock_guard<std::mutex> lock(server->sseMutex_);
+            server->sseConnections_.erase(sessionId);
         }
-        return false; // 完成传输，停止流式传输
+        
+        return false; // 连接已断开，停止流式传输
     }
     
     // 检查是否超时
@@ -131,8 +127,6 @@ bool SSEChatHandler::streamWriteCallback(muduo::net::TcpConnectionPtr conn, http
                 timeout = true;
                 timeoutCounters_.erase(it);
                 LOG_INFO << "Timeout reached for session: " << sessionId;
-            } else {
-                // LOG_INFO << "Remaining checks for session " << sessionId << ": " << it->second;
             }
         } else {
             // 如果找不到计数器，也认为超时
@@ -152,6 +146,13 @@ bool SSEChatHandler::streamWriteCallback(muduo::net::TcpConnectionPtr conn, http
         if (conn->connected()) {
             conn->send(&buf);
         }
+        
+        // 清理会话连接映射
+        {
+            std::lock_guard<std::mutex> lock(server->sseMutex_);
+            server->sseConnections_.erase(sessionId);
+        }
+        
         return false; // 超时，停止流式传输
     }
     

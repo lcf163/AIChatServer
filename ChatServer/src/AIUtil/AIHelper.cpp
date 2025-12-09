@@ -4,6 +4,66 @@
 #include "utils/MQManager.h"
 #include "AIUtil/AIHelper.h"
 
+// 简单的 SSE 数据解析器 (提取 content)
+std::string parseLLMChunk(const std::string& chunk) {
+    std::string content;
+    std::stringstream ss(chunk);
+    std::string line;
+    
+    while (std::getline(ss, line)) {
+        // 去除行尾可能的 \r
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+
+        if (line.empty()) continue;
+
+        // 情况1：标准的 SSE 格式 "data: {...}"
+        if (line.find("data: ") == 0) {
+            std::string jsonStr = line.substr(6); // 去掉 "data: "
+            if (jsonStr == "[DONE]") continue; // 忽略结束标记
+            
+            try {
+                json j = json::parse(jsonStr);
+                // 1. 兼容 OpenAI 格式结构
+                if (j.contains("choices") && !j["choices"].empty()) {
+                    auto& choice = j["choices"][0];
+                    if (choice.contains("delta") && choice["delta"].contains("content")) {
+                         if (!choice["delta"]["content"].is_null()) {
+                            content += choice["delta"]["content"].get<std::string>();
+                         }
+                    }
+                    else if (choice.contains("message") && choice["message"].contains("content")) {
+                         if (!choice["message"]["content"].is_null()) {
+                            content += choice["message"]["content"].get<std::string>();
+                         }
+                    }
+                }
+                // 2. 兼容 阿里百炼原生/RAG 格式结构 (output -> text) - 流式
+                else if (j.contains("output") && j["output"].contains("text")) {
+                     if (!j["output"]["text"].is_null()) {
+                        content += j["output"]["text"].get<std::string>();
+                     }
+                }
+            } catch (...) {
+                // 忽略解析错误的行
+            }
+        } 
+        // 情况2：非 SSE 的完整 JSON 响应 (例如 RAG 同步返回)
+        else if (line[0] == '{') {
+             try {
+                json j = json::parse(line);
+                if (j.contains("output") && j["output"].contains("text")) {
+                    if (!j["output"]["text"].is_null()) {
+                        content += j["output"]["text"].get<std::string>();
+                    }
+                }
+             } catch (...) {}
+        }
+    }
+    return content;
+}
+
 enum modelType {
     AliType = 1,
     DouType = 2,
@@ -37,104 +97,162 @@ void AIHelper::restoreMessage(const std::string& userInput,long long ms) {
 
 // 发送聊天消息
 std::string AIHelper::chat(int userId,std::string userName, std::string sessionId, std::string userQuestion, std::string modelType) {
-    return chatImpl(userId, userName, sessionId, userQuestion, modelType);
+    return chatImpl(userId, userName, sessionId, userQuestion, modelType, nullptr);
 }
 
 // 异步发送聊天消息
-std::future<std::string> AIHelper::chatAsync(std::shared_ptr<ThreadPool> pool, int userId, std::string userName, std::string sessionId, std::string userQuestion, std::string modelType) {
+std::future<std::string> AIHelper::chatAsync(std::shared_ptr<ThreadPool> pool, int userId, std::string userName, std::string sessionId, std::string userQuestion, std::string modelType, StreamCallback callback) {
     // 使用线程池执行任务
-    return pool->enqueue([this, userId, userName, sessionId, userQuestion, modelType]() {
-        return chatImpl(userId, userName, sessionId, userQuestion, modelType);
+    return pool->enqueue([=]() {
+        return chatImpl(userId, userName, sessionId, userQuestion, modelType, callback);
     });
 }
 
 // 实际执行聊天逻辑的方法
-std::string AIHelper::chatImpl(int userId, std::string userName, std::string sessionId, std::string userQuestion, std::string modelType) {
+std::string AIHelper::chatImpl(int userId, std::string userName, std::string sessionId, std::string userQuestion, std::string modelType, StreamCallback callback) {
     // 设置策略
     setStrategy(StrategyFactory::instance().create(modelType));
     
+    // 判断是否为 RAG 模型
+    bool isRAG = (modelType == std::to_string(AliRAGType));
+
     if (!strategy->isMCPModel) {
         addMessage(userId, userName, true, userQuestion, sessionId);
         json payload = strategy->buildRequest(this->messages);
+        
+        std::string fullResponse;
+         
+        // 只有当有 callback 且 不是 RAG 模型时，才启用流式传输。
+        // 如果是 RAG 模型，即使有 callback，也强制进入 else 分支（非流式）。
+        if (callback && !isRAG) {
+            // 创建一个包装回调，用于累积完整响应
+            StreamCallback wrappedCallback = [callback, &fullResponse](const std::string& delta) {
+                fullResponse += delta;
+                callback(delta);
+            };
+            
+            payload["stream"] = true; // 强制流式
 
-        // 执行请求
-        json response = executeCurl(payload);
-        std::string answer = strategy->parseResponse(response);
-        addMessage(userId, userName, false, answer, sessionId);
-        return answer.empty() ? "[Error] 无法解析响应" : answer;
+            // // 针对普通阿里模型可能需要的参数
+            // if (payload.contains("input")) {
+            //     if (!payload.contains("parameters")) {
+            //         payload["parameters"] = json::object();
+            //     }
+            //     // 普通应用开启流式时推荐开启增量输出，防止重复
+            //     payload["parameters"]["incremental_output"] = true;
+            // }
+
+            executeCurl(payload, wrappedCallback);
+            
+            // 保存AI助手的完整回复到数据库
+            addMessage(userId, userName, false, fullResponse, sessionId);
+            return fullResponse; 
+
+        } else {
+            // ==== 非流式模式 ====
+            
+            // 确保不包含 stream 参数 (防止污染)
+            if (payload.contains("stream")) {
+                payload.erase("stream");
+            }
+
+            // 执行同步请求，获取完整 JSON
+            // 注意：这里传入 nullptr 作为 callback，告诉 executeCurl 不要走流式处理
+            json response = executeCurl(payload, nullptr);
+            std::string answer;
+
+            // 解析响应：优先尝试解析阿里 RAG 的 output.text 格式
+            if (response.contains("output") && response["output"].contains("text")) {
+                if (!response["output"]["text"].is_null()) {
+                    answer = response["output"]["text"].get<std::string>();
+                }
+            } else {
+                // 回退到 Strategy 的默认解析 (通常是 OpenAI 格式)
+                answer = strategy->parseResponse(response);
+            }
+            
+            // 如果是 RAG 模式且有回调（前端在等 SSE），手动把完整结果推回去
+            // 这样前端虽然等一会儿，但最终会收到一个 SSE 事件，显示完整内容
+            if (callback && !answer.empty()) {
+                callback(answer);
+            }
+
+            if (answer.empty()) {
+                answer = "[Error] 无法解析响应或响应为空";
+                LOG_ERROR << "Failed to parse response: " << response.dump();
+            }
+
+            addMessage(userId, userName, false, answer, sessionId);
+            return answer;
+        }
     }
     
-    // 使用单例模式的AIConfig，避免重复加载配置文件
+    // ======== MCP / Tool Call 逻辑 ========
+
     AIConfig& config = AIConfig::getInstance();
     std::string tempUserQuestion = config.buildPrompt(userQuestion);
     messages.push_back({ tempUserQuestion, 0 });
 
     json firstReq = strategy->buildRequest(this->messages);
-    json firstResp = executeCurl(firstReq);
+    json firstResp = executeCurl(firstReq); 
     std::string aiResult = strategy->parseResponse(firstResp);
-    // 用完立即移除提示词
     messages.pop_back();
 
-    // 解析AI响应（是否工具调用）
     AIToolCall call = config.parseAIResponse(aiResult);
 
-    // 情况1：AI 不调用工具
-    if (!call.isToolCall) {
-        addMessage(userId, userName, true, userQuestion, sessionId);
-        addMessage(userId, userName, false, aiResult, sessionId);
-        return aiResult;
-    }
-
-    // 情况2：AI 调用工具
-    AIToolRegistry registry;
-
-    // 验证工具参数
-    if (!registry.validateToolArguments(call.toolName, call.args)) {
-        std::string prompt = "工具 " + call.toolName + " 缺少必要参数，请提供完整信息。";
-        
-        // 对特定工具提供更友好的提示
-        if (call.toolName == "get_weather") {
-            prompt = "我需要知道您想查询哪个城市的天气，请告诉我城市名称。";
+    if (call.isToolCall) {
+        std::shared_ptr<Tool> tool = config.getToolRegistry().getTool(call.toolName);
+        if (tool) {
+            json toolParams = tool->getParameters();
+            bool valid = true;
+            std::string errorMsg;
+            
+            if (toolParams.contains("required") && toolParams["required"].is_array()) {
+                for (const auto& requiredParam : toolParams["required"]) {
+                    if (requiredParam.is_string()) {
+                        std::string paramName = requiredParam.get<std::string>();
+                        if (!call.args.contains(paramName) || 
+                            call.args[paramName].is_null() || 
+                            (call.args[paramName].is_string() && call.args[paramName].get<std::string>().empty())) {
+                            valid = false;
+                            errorMsg = "缺少必要参数: " + paramName;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (valid) {
+                try {
+                    json toolResult = tool->execute(call.args);
+                    messages.push_back({ "[工具调用结果]\n" + toolResult.dump(4), 0 });
+                } catch (const std::exception& e) {
+                    messages.push_back({ "[工具执行错误]\n" + std::string(e.what()), 0 });
+                }
+            } else {
+                messages.push_back({ "[参数验证失败]\n" + errorMsg, 0 });
+            }
+        } else {
+            messages.push_back({ "[工具调用失败]\n未找到工具: " + call.toolName, 0 });
         }
-        
-        addMessage(userId, userName, true, userQuestion, sessionId);
-        addMessage(userId, userName, false, prompt, sessionId);
-        return prompt;
+    } else {
+        messages.push_back({ aiResult, 0 });
     }
 
-    // 调用工具并处理结果
-    try {
-        json toolResult = registry.invoke(call.toolName, call.args);
-        
-        // 检查工具调用是否返回错误
-        if (toolResult.contains("error")) {
-            std::string errorMsg = toolResult["error"];
-            std::string errMsg = "抱歉，" + errorMsg + "。请您稍后再试，或者通过其他渠道查询。";
-            addMessage(userId, userName, true, userQuestion, sessionId);
-            addMessage(userId, userName, false, errMsg, sessionId);
-            return errMsg;
-        }
-        
-        // 构建工具调用结果的提示词
-        std::string secondPrompt = config.buildToolResultPrompt(userQuestion, call.toolName, call.args, toolResult);
-        messages.push_back({ secondPrompt, 0 });
-
-        json secondReq = strategy->buildRequest(messages);
-        json secondResp = executeCurl(secondReq);
-        std::string finalAnswer = strategy->parseResponse(secondResp);
-        // 删除包含提示词的信息
-        messages.pop_back();
-
-        addMessage(userId, userName, true, userQuestion, sessionId);
-        addMessage(userId, userName, false, finalAnswer, sessionId);
-        return finalAnswer;
+    // 第二步请求
+    json secondReq = strategy->buildRequest(this->messages);
+    json secondResp = executeCurl(secondReq);
+    std::string finalAnswer = strategy->parseResponse(secondResp);
+    messages.push_back({ finalAnswer, 0 });
+    
+    addMessage(userId, userName, false, finalAnswer, sessionId);
+    
+    // 如果有回调，发送最终结果
+    if (callback) {
+        callback(finalAnswer);
     }
-    catch (const std::exception& e) {
-        std::string err = "[工具调用失败] " + std::string(e.what());
-        addMessage(userId, userName, true, userQuestion, sessionId);
-        addMessage(userId, userName, false, err, sessionId);
-        return err;
-    }
+
+    return finalAnswer;
 }
 
 // 发送自定义请求体
@@ -147,7 +265,7 @@ std::vector<std::pair<std::string, long long>> AIHelper::GetMessages() {
 }
 
 // 执行 curl 请求
-json AIHelper::executeCurl(const json& payload) {
+json AIHelper::executeCurl(const json& payload, StreamCallback callback) {
     CURL* curl = curl_easy_init();
     if (!curl) {
         throw std::runtime_error("Failed to initialize curl");
@@ -161,35 +279,76 @@ json AIHelper::executeCurl(const json& payload) {
 
     headers = curl_slist_append(headers, authHeader.c_str());
     headers = curl_slist_append(headers, "Content-Type: application/json");
+    
+    // 仅在真正启用流式回调时添加 Accept 头
+    if (callback) {
+        headers = curl_slist_append(headers, "Accept: text/event-stream");
+    }
+
     std::string payloadStr = payload.dump();
+
+    CurlContext ctx;
+    ctx.buffer = &readBuffer;
+    ctx.callback = callback; // 如果是 RAG 同步调用，这里传入的是 nullptr
 
     curl_easy_setopt(curl, CURLOPT_URL, strategy->getApiUrl().c_str());
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payloadStr.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ctx);
 
     CURLcode res = curl_easy_perform(curl);
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
 
     if (res != CURLE_OK) {
-        throw std::runtime_error("curl_easy_perform() failed: " + std::string(curl_easy_strerror(res)));
+        std::string err = "curl_easy_perform() failed: " + std::string(curl_easy_strerror(res));
+        LOG_ERROR << err;
+        if (!callback) throw std::runtime_error(err);
+        return json::object();
     }
 
+    // 如果是流式调用，返回空json
+    if (callback) {
+        return json::object(); 
+    }
+
+    // 非流式调用，解析完整 JSON 并返回
     try {
+        if (readBuffer.empty()) return json::object();
         return json::parse(readBuffer);
     }
-    catch (...) {
-        throw std::runtime_error("Failed to parse JSON response: " + readBuffer);
+    catch (const std::exception& e) {
+        LOG_ERROR << "Failed to parse JSON response: " << e.what() << " | Body: " << readBuffer;
+        throw std::runtime_error("Failed to parse JSON response");
     }
 }
 
 // curl 回调函数，把返回的数据写到 string buffer
 size_t AIHelper::WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
     size_t totalSize = size * nmemb;
-    std::string* buffer = static_cast<std::string*>(userp);
-    buffer->append(static_cast<char*>(contents), totalSize);
+    auto* ctx = static_cast<CurlContext*>(userp);
+    
+    std::string rawData(static_cast<char*>(contents), totalSize);
+    ctx->buffer->append(rawData);
+    
+    LOG_INFO << "Raw data received (" << totalSize << " bytes): " << rawData;
+    
+    // 实时解析并回调
+    if (ctx->callback) {
+        std::string deltaText = parseLLMChunk(rawData);
+        if (!deltaText.empty()) {
+            ctx->callback(deltaText);
+        }
+        
+        // 检查是否是流式结束标记
+        if (rawData.find("[DONE]") != std::string::npos) {
+            LOG_INFO << "Streaming AI response completed. ";
+        }
+    } else {
+        // 输出非流式调用结束
+        LOG_INFO << "Full AI response completed. ";
+    }
     return totalSize;
 }
 
