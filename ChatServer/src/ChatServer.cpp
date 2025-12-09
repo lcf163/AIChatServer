@@ -1,4 +1,5 @@
 #include <muduo/base/Logging.h>
+#include <thread> // 用于获取CPU核心数
 
 #include "http/HttpRequest.h"
 #include "http/HttpResponse.h"
@@ -48,7 +49,13 @@ void ChatServer::initialize() {
     initializeRouter();
 
     // 初始化业务线程池，用于处理AI请求
-    businessThreadPool_ = std::make_shared<ThreadPool>(4);
+    // 线程数设置为CPU核心数+1，但最少4个，最多16个
+    size_t threadCount = std::thread::hardware_concurrency() + 1;
+    threadCount = std::max(threadCount, static_cast<size_t>(4));
+    threadCount = std::min(threadCount, static_cast<size_t>(16));
+    
+    LOG_INFO << "Initializing business thread pool with " << threadCount << " threads";
+    businessThreadPool_ = std::make_shared<ThreadPool>(threadCount);
 
     LOG_INFO << "ChatServer initialize success !";
 }

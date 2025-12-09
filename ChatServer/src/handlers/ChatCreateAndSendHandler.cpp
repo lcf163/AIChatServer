@@ -40,7 +40,7 @@ void ChatCreateAndSendHandler::handle(const http::HttpRequest& req, http::HttpRe
 		std::string sessionId = generator.generate();
 
 		// 异步持久化会话到数据库，避免阻塞主线程
-		server_->businessThreadPool_->enqueue([this, userId, username, sessionId]() {
+		server_->getBusinessThreadPool()->enqueue([this, userId, username, sessionId]() {
 			try {
 				// 使用参数化查询防止SQL注入
 				std::string insertSessionSql = "INSERT INTO chat_session (user_id, username, session_id, title) VALUES (?, ?, ?, ?)";
@@ -69,21 +69,24 @@ void ChatCreateAndSendHandler::handle(const http::HttpRequest& req, http::HttpRe
 		}
 
 		// 使用线程池异步处理AI请求，真正避免阻塞IO线程
-		auto future = AIHelperPtr->chatAsync(server_->businessThreadPool_, userId, username, sessionId, userQuestion, modelType);
+		auto future = AIHelperPtr->chatAsync(server_->getBusinessThreadPool(), userId, username, sessionId, userQuestion, modelType);
 		
 		// 在另一个线程中等待结果并处理
-		server_->businessThreadPool_->enqueue([this, sessionId, userId, future = std::move(future)]() mutable {
+		server_->getBusinessThreadPool()->enqueue([this, sessionId, userId, future = std::move(future)]() mutable {
 			try {
 				std::string result = future.get();
-				// 通过WebSocket推送结果给客户端
-				std::lock_guard<std::mutex> lock(server_->mutexForChatResults);
-				server_->chatResults[sessionId] = result;
+				// 通过SSE推送结果给客户端
+				server_->sendSSEData(sessionId, result, "result");
+                // 发送结束信号
+                server_->sendSSEData(sessionId, "{\"status\":\"done\"}", "end");
 			} catch (const std::exception& e) {
 				LOG_ERROR << "AI task failed for session " << sessionId << ": " << e.what();
+                // 发送错误事件
+                server_->sendSSEData(sessionId, "{\"error\":\"Processing Failed\"}", "error");
 			}
 		});
 
-		// 立即返回 sessionId，前端需轮询结果
+		// 立即返回 sessionId，前端需通过SSE获取结果
 		json successResp;
 		successResp["success"] = true;
 		successResp["message"] = "AI processing started";

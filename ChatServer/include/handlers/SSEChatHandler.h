@@ -22,9 +22,6 @@ public:
 private:
 	ChatServer* server_;
 	
-	// 流式写入回调函数
-	static bool streamWriteCallback(muduo::net::TcpConnectionPtr conn, http::HttpResponse* resp, ChatServer* server);
-	
 	// 用于跟踪每个连接的超时计数器
 	static std::unordered_map<std::string, int> timeoutCounters_;
 	static std::mutex timeoutMutex_;

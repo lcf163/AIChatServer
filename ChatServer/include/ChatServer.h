@@ -66,6 +66,9 @@ public:
 	// eventType 默认为 "result"
 	void sendSSEData(const std::string& sessionId, const std::string& data, const std::string& eventType = "result");
 	
+	// 获取业务线程池引用，供Handlers使用
+	std::shared_ptr<ThreadPool> getBusinessThreadPool() { return businessThreadPool_; }
+	
 private:
 	friend class ChatLoginHandler;
 	friend class ChatRegisterHandler;

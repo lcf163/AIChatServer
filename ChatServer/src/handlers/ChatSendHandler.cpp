@@ -75,10 +75,10 @@ void ChatSendHandler::handle(const http::HttpRequest& req, http::HttpResponse* r
         };
 
 		// 使用线程池异步处理AI请求，真正避免阻塞IO线程
-		auto future = AIHelperPtr->chatAsync(server_->businessThreadPool_, userId, username, sessionId, userQuestion, modelType, streamCallback);
+		auto future = AIHelperPtr->chatAsync(server_->getBusinessThreadPool(), userId, username, sessionId, userQuestion, modelType, streamCallback);
 		
-		// 在另一个线程中等待结果并处理
-		server_->businessThreadPool_->enqueue([this, sessionId, userId, future = std::move(future)]() mutable {
+		// 在另一个线程中等待结果并处理最终结果
+		server_->getBusinessThreadPool()->enqueue([this, sessionId, userId, future = std::move(future)]() mutable {
 			try {
 				std::string result = future.get();
 				// 推送结果给客户端 (这里是 SSE)
@@ -91,7 +91,7 @@ void ChatSendHandler::handle(const http::HttpRequest& req, http::HttpResponse* r
 			} catch (const std::exception& e) {
 				LOG_ERROR << "AI task failed for session " << sessionId << ": " << e.what();
                 // 发送错误事件
-                server_->sendSSEData(sessionId, "{\"error\":\"Processing Failed\"}", "timeout");
+                server_->sendSSEData(sessionId, "{\"error\":\"Processing Failed\"}", "error");
 			}
 		});
 
@@ -99,6 +99,7 @@ void ChatSendHandler::handle(const http::HttpRequest& req, http::HttpResponse* r
 		json successResp;
 		successResp["success"] = true;
 		successResp["message"] = "AI processing started";
+		successResp["sessionId"] = sessionId;
 
 		std::string successBody = successResp.dump(4);
 		resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
