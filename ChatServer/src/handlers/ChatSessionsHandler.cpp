@@ -1,5 +1,6 @@
 #include "handlers/ChatSessionsHandler.h"
 #include <muduo/base/Logging.h>
+#include <shared_mutex>
 
 void ChatSessionsHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {
@@ -30,8 +31,12 @@ void ChatSessionsHandler::handle(const http::HttpRequest& req, http::HttpRespons
         // 优先从内存查询会话信息
         std::vector<std::string> sessionsFromMemory;
         {
-            std::lock_guard<std::mutex> lock(server_->mutexForSessionsId);
-            sessionsFromMemory = server_->sessionsIdsMap[userId]; 
+            std::shared_lock<std::shared_timed_mutex> lock(server_->mutexForSessionsId);
+            // 注意：这里需要检查 key 是否存在，避免 operator[] 自动创建导致需要写权限
+            auto it = server_->sessionsIdsMap.find(userId);
+            if (it != server_->sessionsIdsMap.end()) {
+                sessionsFromMemory = it->second;
+            }
         }
 
         // 如果内存中有会话数据，直接使用
@@ -61,8 +66,10 @@ void ChatSessionsHandler::handle(const http::HttpRequest& req, http::HttpRespons
                         sessionArray.push_back(s);
                         
                         // 同时将查询到的会话信息加载到内存中
-                        std::lock_guard<std::mutex> lock(server_->mutexForSessionsId);
-                        server_->sessionsIdsMap[userId].push_back(result->getString("session_id"));
+                        {
+                            std::unique_lock<std::shared_timed_mutex> lock(server_->mutexForSessionsId);
+                            server_->sessionsIdsMap[userId].push_back(result->getString("session_id"));
+                        }
                     }
                     // unique_ptr会自动释放资源，不再需要手动delete
                     LOG_INFO << "Loaded " << sessionArray.size() << " sessions from database";

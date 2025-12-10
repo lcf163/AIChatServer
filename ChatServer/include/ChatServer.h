@@ -5,6 +5,7 @@
 #include <tuple>
 #include <unordered_map>
 #include <mutex>
+#include <shared_mutex>
 #include <cstdlib>
 #include <ctime>
 #include <iostream>
@@ -107,24 +108,24 @@ private:
 	http::MysqlUtil mysqlUtil_;
 
 	std::unordered_map<int, bool> onlineUsers_;
-	std::mutex mutexForOnlineUsers_;
+	std::shared_timed_mutex mutexForOnlineUsers_;
 
 	std::unordered_map<int, std::unordered_map<std::string, std::shared_ptr<AIHelper>>> chatInformation;
 	std::mutex mutexForChatInformation;
 
 	std::unordered_map<int, std::vector<std::string>> sessionsIdsMap;
-	std::mutex mutexForSessionsId;
+	std::shared_timed_mutex mutexForSessionsId;
 	
 	// 添加业务线程池，用于处理AI请求
 	std::shared_ptr<ThreadPool> businessThreadPool_;
 	
 	// 存储聊天结果的容器
 	std::unordered_map<std::string, std::string> chatResults;
-	std::mutex mutexForChatResults;
+	std::shared_timed_mutex mutexForChatResults;
 	
 	// SSE 连接映射表
 	std::unordered_map<std::string, muduo::net::TcpConnectionPtr> sseConnections_;
-	std::mutex sseMutex_;
+	std::shared_timed_mutex sseMutex_;
 	
 	// LRU Cache相关成员
 	std::list<std::pair<int, std::string>> lruCacheList_;

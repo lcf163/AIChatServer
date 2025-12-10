@@ -1,4 +1,5 @@
 #include "handlers/ChatLogoutHandler.h"
+#include <shared_mutex>
 
 void ChatLogoutHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {
@@ -22,7 +23,8 @@ void ChatLogoutHandler::handle(const http::HttpRequest& req, http::HttpResponse*
         server_->getSessionManager()->destroySession(session->getId());
 
         {   
-            std::lock_guard<std::mutex> lock(server_->mutexForOnlineUsers_);
+            // 使用 unique_lock (写锁)
+            std::unique_lock<std::shared_timed_mutex> lock(server_->mutexForOnlineUsers_);
             server_->onlineUsers_.erase(userId);
         }
 

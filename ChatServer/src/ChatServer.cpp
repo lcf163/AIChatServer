@@ -72,7 +72,7 @@ void ChatServer::loadSessionsFromDatabase() {
             return;
         }
 
-        std::lock_guard<std::mutex> lockSessions(mutexForSessionsId);
+        std::unique_lock<std::shared_timed_mutex> lockSessions(mutexForSessionsId);
         std::lock_guard<std::mutex> lockChat(mutexForChatInformation);
         
         int sessionCount = 0;
@@ -137,9 +137,12 @@ std::shared_ptr<AIHelper> ChatServer::loadSessionOnDemand(int userId, const std:
             userSessions[sessionId] = helper;
             
             // 更新会话列表
-            auto& sessionList = sessionsIdsMap[userId];
-            if (std::find(sessionList.begin(), sessionList.end(), sessionId) == sessionList.end()) {
-                sessionList.push_back(sessionId);
+            {
+                std::unique_lock<std::shared_timed_mutex> sessionLock(mutexForSessionsId);
+                auto& sessionList = sessionsIdsMap[userId];
+                if (std::find(sessionList.begin(), sessionList.end(), sessionId) == sessionList.end()) {
+                    sessionList.push_back(sessionId);
+                }
             }
             
             // 加载成功后，更新LRU缓存
@@ -195,18 +198,20 @@ void ChatServer::initializeSession() {
 }
 
 void ChatServer::updateLRUCache(int userId, const std::string& sessionId) {
-    std::lock_guard<std::mutex> lock(lruCacheMutex_);
-    
-    // 如果会话已在LRU缓存中，先移除旧条目
-    auto it = lruCacheMap_.find(sessionId);
-    if (it != lruCacheMap_.end()) {
-        lruCacheList_.erase(it->second);
-        lruCacheMap_.erase(it);
+    {
+        std::lock_guard<std::mutex> lock(lruCacheMutex_);
+        
+        // 如果会话已在LRU缓存中，先移除旧条目
+        auto it = lruCacheMap_.find(sessionId);
+        if (it != lruCacheMap_.end()) {
+            lruCacheList_.erase(it->second);
+            lruCacheMap_.erase(it);
+        }
+        
+        // 将新会话添加到LRU链表头部（表示最近使用）
+        lruCacheList_.emplace_front(userId, sessionId);
+        lruCacheMap_[sessionId] = lruCacheList_.begin();
     }
-    
-    // 将新会话添加到LRU链表头部（表示最近使用）
-    lruCacheList_.emplace_front(userId, sessionId);
-    lruCacheMap_[sessionId] = lruCacheList_.begin();
     
     // 检查并执行LRU淘汰策略
     evictLRUCacheIfNeeded();
@@ -224,12 +229,15 @@ void ChatServer::evictLRUCacheIfNeeded() {
         lruCacheList_.pop_back();
         
         // 从内存中的聊天信息里移除该会话
-        auto userIt = chatInformation.find(userId);
-        if (userIt != chatInformation.end()) {
-            userIt->second.erase(sessionId);
-            // 如果该用户的所有会话都被移除，则清理用户条目
-            if (userIt->second.empty()) {
-                chatInformation.erase(userIt);
+        {
+            std::lock_guard<std::mutex> lock(mutexForChatInformation);
+            auto userIt = chatInformation.find(userId);
+            if (userIt != chatInformation.end()) {
+                userIt->second.erase(sessionId);
+                // 如果该用户的所有会话都被移除，则清理用户条目
+                if (userIt->second.empty()) {
+                    chatInformation.erase(userIt);
+                }
             }
         }
         
@@ -257,13 +265,13 @@ void ChatServer::packageResp(const std::string& version, http::HttpResponse::Htt
 
 void ChatServer::addSSEConnection(const std::string& sessionId, const muduo::net::TcpConnectionPtr& conn)
 {
-    std::lock_guard<std::mutex> lock(sseMutex_);
+    std::unique_lock<std::shared_timed_mutex> lock(sseMutex_);
     sseConnections_[sessionId] = conn;
 }
 
 void ChatServer::removeSSEConnection(const std::string& sessionId)
 {
-    std::lock_guard<std::mutex> lock(sseMutex_);
+    std::unique_lock<std::shared_timed_mutex> lock(sseMutex_);
     sseConnections_.erase(sessionId);
 }
 
@@ -271,7 +279,7 @@ void ChatServer::sendSSEData(const std::string& sessionId, const std::string& da
 {
     muduo::net::TcpConnectionPtr conn;
     {
-        std::lock_guard<std::mutex> lock(sseMutex_);
+        std::shared_lock<std::shared_timed_mutex> lock(sseMutex_);
         auto it = sseConnections_.find(sessionId);
         if (it != sseConnections_.end()) {
             conn = it->second;

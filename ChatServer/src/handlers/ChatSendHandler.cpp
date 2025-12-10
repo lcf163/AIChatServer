@@ -82,16 +82,19 @@ void ChatSendHandler::handle(const http::HttpRequest& req, http::HttpResponse* r
 			try {
 				std::string result = future.get();
 				// 推送结果给客户端 (这里是 SSE)
-				std::lock_guard<std::mutex> lock(server_->mutexForChatResults);
-				server_->chatResults[sessionId] = result;
-                
-                // 【关键】发送结束信号给前端
-                server_->sendSSEData(sessionId, "{\"status\":\"done\"}", "end");
-                
+				{
+					// 使用 unique_lock (写锁)
+					std::unique_lock<std::shared_timed_mutex> lock(server_->mutexForChatResults);
+					server_->chatResults[sessionId] = result;
+				}
+				
+				// 【关键】发送结束信号给前端
+				server_->sendSSEData(sessionId, "{\"status\":\"done\"}", "end");
+				
 			} catch (const std::exception& e) {
 				LOG_ERROR << "AI task failed for session " << sessionId << ": " << e.what();
-                // 发送错误事件
-                server_->sendSSEData(sessionId, "{\"error\":\"Processing Failed\"}", "error");
+				// 发送错误事件
+				server_->sendSSEData(sessionId, "{\"error\":\"Processing Failed\"}", "error");
 			}
 		});
 

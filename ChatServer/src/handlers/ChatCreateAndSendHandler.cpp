@@ -60,7 +60,12 @@ void ChatCreateAndSendHandler::handle(const http::HttpRequest& req, http::HttpRe
 					sessionId,
 					std::make_shared<AIHelper>()
 				);
-				server_->sessionsIdsMap[userId].push_back(sessionId);
+				// 同时将新会话ID添加到内存中
+				{
+					std::unique_lock<std::shared_timed_mutex> lock(server_->mutexForSessionsId);
+					server_->sessionsIdsMap[userId].push_back(sessionId);
+				}
+
 			}
 			AIHelperPtr= userSessions[sessionId];
 			
