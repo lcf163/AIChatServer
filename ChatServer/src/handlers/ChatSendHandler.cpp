@@ -39,17 +39,13 @@ void ChatSendHandler::handle(const http::HttpRequest& req, http::HttpResponse* r
 
 		std::shared_ptr<AIHelper> AIHelperPtr;
 		{
-			std::lock_guard<std::mutex> lock(server_->mutexForChatInformation);
-			auto& userSessions = server_->chatInformation[userId];
-
-			// 直接获取或创建AIHelper实例
-			if (userSessions.find(sessionId) == userSessions.end()) {
-				// 第一次访问：创建新实例
+			// 使用无锁方法替代 mutexForChatInformation
+			AIHelperPtr = server_->getChatSession(userId, sessionId);
+			
+			// 如果不存在则创建新实例
+			if (!AIHelperPtr) {
 				AIHelperPtr = std::make_shared<AIHelper>();
-				userSessions[sessionId] = AIHelperPtr;
-			} else {
-				// 已存在：直接获取
-				AIHelperPtr = userSessions[sessionId];
+				server_->addOrUpdateChatSession(userId, sessionId, AIHelperPtr);
 			}
 			
 			// 更新LRU缓存
@@ -83,9 +79,8 @@ void ChatSendHandler::handle(const http::HttpRequest& req, http::HttpResponse* r
 				std::string result = future.get();
 				// 推送结果给客户端 (这里是 SSE)
 				{
-					// 使用 unique_lock (写锁)
-					std::unique_lock<std::shared_timed_mutex> lock(server_->mutexForChatResults);
-					server_->chatResults[sessionId] = result;
+					// 使用无锁方法替代 mutexForChatResults
+					server_->setChatResult(sessionId, result);
 				}
 				
 				// 【关键】发送结束信号给前端

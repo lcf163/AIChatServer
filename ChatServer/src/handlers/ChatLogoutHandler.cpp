@@ -22,11 +22,8 @@ void ChatLogoutHandler::handle(const http::HttpRequest& req, http::HttpResponse*
         session->clear();
         server_->getSessionManager()->destroySession(session->getId());
 
-        {   
-            // 使用 unique_lock (写锁)
-            std::unique_lock<std::shared_timed_mutex> lock(server_->mutexForOnlineUsers_);
-            server_->onlineUsers_.erase(userId);
-        }
+        // 使用无锁方法替代 mutexForOnlineUsers_
+        server_->removeUser(userId);
 
         json response;
         response["message"] = "logout successful";

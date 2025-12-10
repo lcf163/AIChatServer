@@ -31,12 +31,8 @@ void ChatSessionsHandler::handle(const http::HttpRequest& req, http::HttpRespons
         // 优先从内存查询会话信息
         std::vector<std::string> sessionsFromMemory;
         {
-            std::shared_lock<std::shared_timed_mutex> lock(server_->mutexForSessionsId);
-            // 注意：这里需要检查 key 是否存在，避免 operator[] 自动创建导致需要写权限
-            auto it = server_->sessionsIdsMap.find(userId);
-            if (it != server_->sessionsIdsMap.end()) {
-                sessionsFromMemory = it->second;
-            }
+            // 使用无锁方法替代 mutexForSessionsId
+            sessionsFromMemory = server_->getSessionIds(userId);
         }
 
         // 如果内存中有会话数据，直接使用
@@ -67,8 +63,8 @@ void ChatSessionsHandler::handle(const http::HttpRequest& req, http::HttpRespons
                         
                         // 同时将查询到的会话信息加载到内存中
                         {
-                            std::unique_lock<std::shared_timed_mutex> lock(server_->mutexForSessionsId);
-                            server_->sessionsIdsMap[userId].push_back(result->getString("session_id"));
+                            // 使用无锁方法替代 mutexForSessionsId
+                            server_->addSessionId(userId, result->getString("session_id"));
                         }
                     }
                     // unique_ptr会自动释放资源，不再需要手动delete

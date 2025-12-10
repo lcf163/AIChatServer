@@ -52,22 +52,16 @@ void ChatCreateAndSendHandler::handle(const http::HttpRequest& req, http::HttpRe
 
 		std::shared_ptr<AIHelper> AIHelperPtr;
 		{
-			std::lock_guard<std::mutex> lock(server_->mutexForChatInformation);
-			auto& userSessions = server_->chatInformation[userId];
-
-			if (userSessions.find(sessionId) == userSessions.end()) {
-				userSessions.emplace( 
-					sessionId,
-					std::make_shared<AIHelper>()
-				);
+			// 使用无锁方法替代 mutexForChatInformation
+			AIHelperPtr = server_->getChatSession(userId, sessionId);
+			
+			// 如果不存在则创建新实例
+			if (!AIHelperPtr) {
+				AIHelperPtr = std::make_shared<AIHelper>();
+				server_->addOrUpdateChatSession(userId, sessionId, AIHelperPtr);
 				// 同时将新会话ID添加到内存中
-				{
-					std::unique_lock<std::shared_timed_mutex> lock(server_->mutexForSessionsId);
-					server_->sessionsIdsMap[userId].push_back(sessionId);
-				}
-
+				server_->addSessionId(userId, sessionId);
 			}
-			AIHelperPtr= userSessions[sessionId];
 			
 			// 更新LRU缓存
 			server_->updateLRUCache(userId, sessionId);

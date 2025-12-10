@@ -60,11 +60,33 @@ public:
 	ChatServer* getServer() { return this; }
 	
 	// SSE 连接管理接口
+	// 在线用户管理方法 (无锁实现)
+	void addUser(int userId);
+	void removeUser(int userId);
+	bool isUserOnline(int userId) const;
+	
+	// 聊天信息管理方法 (无锁实现)
+	void addOrUpdateChatSession(int userId, const std::string& sessionId, std::shared_ptr<AIHelper> helper);
+	std::shared_ptr<AIHelper> getChatSession(int userId, const std::string& sessionId);
+	void removeChatSession(int userId, const std::string& sessionId);
+	
+	// 会话ID管理方法 (无锁实现)
+	void addSessionId(int userId, const std::string& sessionId);
+	void removeSessionId(int userId, const std::string& sessionId);
+	std::vector<std::string> getSessionIds(int userId) const;
+	
+	// 聊天结果管理方法 (无锁实现)
+	void setChatResult(const std::string& sessionId, const std::string& result);
+	std::string getChatResult(const std::string& sessionId);
+	void removeChatResult(const std::string& sessionId);
+	
+	// LRU Cache相关方法 (无锁实现)
+	void updateLRUCache(int userId, const std::string& sessionId);
+	void evictLRUCacheIfNeeded();
+	
+	// SSE 连接管理方法 (无锁实现)
 	void addSSEConnection(const std::string& sessionId, const muduo::net::TcpConnectionPtr& conn);
 	void removeSSEConnection(const std::string& sessionId);
-	
-	// 发送 SSE 数据 (线程安全，内部会切到 IO 线程)
-	// eventType 默认为 "result"
 	void sendSSEData(const std::string& sessionId, const std::string& data, const std::string& eventType = "result");
 	
 	// 获取业务线程池引用，供Handlers使用
@@ -92,44 +114,37 @@ private:
 	
 	void loadSessionsFromDatabase();
 
-	// 按需加载会话消息
+	// 按需加载会话消息 - 声明保留，但实现也应改为无锁
 	std::shared_ptr<AIHelper> loadSessionOnDemand(int userId, const std::string& sessionId);
 
 	void packageResp(const std::string& version, http::HttpResponse::HttpStatusCode statusCode,
 		const std::string& statusMsg, bool close, const std::string& contentType,
 		int contentLen, const std::string& body, http::HttpResponse* resp);
 
-	// LRU Cache相关方法
-	void updateLRUCache(int userId, const std::string& sessionId);
-	void evictLRUCacheIfNeeded();
-
 	http::HttpServer httpServer_;
 
 	http::MysqlUtil mysqlUtil_;
 
+	// 在线用户管理 (无锁实现)
 	std::unordered_map<int, bool> onlineUsers_;
-	std::shared_timed_mutex mutexForOnlineUsers_;
-
+	
+	// 聊天信息管理 (无锁实现)
 	std::unordered_map<int, std::unordered_map<std::string, std::shared_ptr<AIHelper>>> chatInformation;
-	std::mutex mutexForChatInformation;
 
+	// 会话ID管理 (无锁实现)
 	std::unordered_map<int, std::vector<std::string>> sessionsIdsMap;
-	std::shared_timed_mutex mutexForSessionsId;
 	
 	// 添加业务线程池，用于处理AI请求
 	std::shared_ptr<ThreadPool> businessThreadPool_;
 	
-	// 存储聊天结果的容器
+	// 存储聊天结果的容器 (无锁实现)
 	std::unordered_map<std::string, std::string> chatResults;
-	std::shared_timed_mutex mutexForChatResults;
 	
-	// SSE 连接映射表
+	// SSE 连接映射表 (无锁实现)
 	std::unordered_map<std::string, muduo::net::TcpConnectionPtr> sseConnections_;
-	std::shared_timed_mutex sseMutex_;
 	
-	// LRU Cache相关成员
+	// LRU Cache相关成员 (无锁实现)
 	std::list<std::pair<int, std::string>> lruCacheList_;
 	std::unordered_map<std::string, std::list<std::pair<int, std::string>>::iterator> lruCacheMap_;
-	std::mutex lruCacheMutex_;
 	static const size_t MAX_ACTIVE_SESSIONS = 1000;
 };

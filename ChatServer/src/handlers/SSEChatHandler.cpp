@@ -3,10 +3,6 @@
 #include <muduo/net/Buffer.h>
 #include <sstream>
 
-// 静态成员变量定义
-std::unordered_map<std::string, int> SSEChatHandler::timeoutCounters_;
-std::mutex SSEChatHandler::timeoutMutex_;
-
 void SSEChatHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {
     try
@@ -48,6 +44,7 @@ void SSEChatHandler::handle(const http::HttpRequest& req, http::HttpResponse* re
             initData << "data: {\"sessionId\": \"" << sessionId << "\", \"status\": \"connected\"}\n\n";
             
             conn->send(initData.str());
+            
             
             return false; // 返回false停止HttpServer的驱动循环，但连接保持打开
         });

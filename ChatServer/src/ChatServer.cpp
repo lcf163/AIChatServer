@@ -72,25 +72,30 @@ void ChatServer::loadSessionsFromDatabase() {
             return;
         }
 
-        std::unique_lock<std::shared_timed_mutex> lockSessions(mutexForSessionsId);
-        std::lock_guard<std::mutex> lockChat(mutexForChatInformation);
+        // 使用 runInLoop 在 IO 线程中执行操作
+        std::promise<void> prom;
+        auto fut = prom.get_future();
         
-        int sessionCount = 0;
-        while (result->next()) {
-            int userId = result->getInt("user_id");
-            std::string sessionId = result->getString("session_id");
+        httpServer_.getLoop()->runInLoop([this, &result, &prom]() {
+            int sessionCount = 0;
+            while (result->next()) {
+                int userId = result->getInt("user_id");
+                std::string sessionId = result->getString("session_id");
 
-            // 只加载会话ID列表，不加载消息内容（懒加载策略）
-            auto& sessionList = sessionsIdsMap[userId];
-            if (std::find(sessionList.begin(), sessionList.end(), sessionId) == sessionList.end()) {
-                sessionList.push_back(sessionId);
+                // 只加载会话ID列表，不加载消息内容（懒加载策略）
+                auto& sessionList = sessionsIdsMap[userId];
+                if (std::find(sessionList.begin(), sessionList.end(), sessionId) == sessionList.end()) {
+                    sessionList.push_back(sessionId);
+                }
+                
+                sessionCount++;
             }
             
-            sessionCount++;
-        }
+            LOG_INFO << "Loaded " << sessionCount << " sessions (messages will load on demand)";
+            prom.set_value();
+        });
         
-        // unique_ptr会自动释放资源，不再需要手动delete
-        LOG_INFO << "Loaded " << sessionCount << " sessions (messages will load on demand)";
+        fut.wait();
     }
     catch (const std::exception& e) {
         LOG_ERROR << "Error loading sessions from database: " << e.what();
@@ -102,15 +107,12 @@ void ChatServer::loadSessionsFromDatabase() {
 
 // 按需加载会话消息
 std::shared_ptr<AIHelper> ChatServer::loadSessionOnDemand(int userId, const std::string& sessionId) {
-    std::lock_guard<std::mutex> lock(mutexForChatInformation);
-    
-    // 检查是否已在内存中
-    auto& userSessions = chatInformation[userId];
-    auto it = userSessions.find(sessionId);
-    if (it != userSessions.end()) {
+    // 先尝试从内存中获取
+    auto helper = getChatSession(userId, sessionId);
+    if (helper) {
         // 如果已存在，更新LRU缓存并返回
         updateLRUCache(userId, sessionId);
-        return it->second;
+        return helper;
     }
     
     // 从数据库加载会话消息
@@ -119,7 +121,7 @@ std::shared_ptr<AIHelper> ChatServer::loadSessionOnDemand(int userId, const std:
         std::unique_ptr<sql::ResultSet> result(mysqlUtil_.executeQuery(sql, std::to_string(userId), sessionId));
 
         // 创建AIHelper实例
-        auto helper = std::make_shared<AIHelper>();
+        auto newHelper = std::make_shared<AIHelper>();
         int messageCount = 0;
 
         if (result) {
@@ -127,39 +129,31 @@ std::shared_ptr<AIHelper> ChatServer::loadSessionOnDemand(int userId, const std:
             while (result->next()) {
                 std::string content = result->getString("content");
                 long long ts = result->getInt64("ts");
-                helper->restoreMessage(content, ts);
+                newHelper->restoreMessage(content, ts);
                 messageCount++;
             }
-            // unique_ptr会自动释放资源，不再需要手动delete
         }
             
-            // 添加到内存
-            userSessions[sessionId] = helper;
-            
-            // 更新会话列表
-            {
-                std::unique_lock<std::shared_timed_mutex> sessionLock(mutexForSessionsId);
-                auto& sessionList = sessionsIdsMap[userId];
-                if (std::find(sessionList.begin(), sessionList.end(), sessionId) == sessionList.end()) {
-                    sessionList.push_back(sessionId);
-                }
-            }
-            
-            // 加载成功后，更新LRU缓存
-            updateLRUCache(userId, sessionId);
-            
-            LOG_INFO << "Loaded " << messageCount << " messages for session " << sessionId;
-            return helper;
-            
-        } catch (const std::exception& e) {
-            LOG_ERROR << "Error loading session messages from database: " << e.what();
-            // 出错时仍创建一个空的AIHelper实例
-            auto helper = std::make_shared<AIHelper>();
-            userSessions[sessionId] = helper;
-            updateLRUCache(userId, sessionId);
-            return helper;
-        }
-
+        // 添加到内存
+        addOrUpdateChatSession(userId, sessionId, newHelper);
+        
+        // 更新会话列表
+        addSessionId(userId, sessionId);
+        
+        // 加载成功后，更新LRU缓存
+        updateLRUCache(userId, sessionId);
+        
+        LOG_INFO << "Loaded " << messageCount << " messages for session " << sessionId;
+        return newHelper;
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR << "Error loading session messages from database: " << e.what();
+        // 出错时仍创建一个空的AIHelper实例
+        auto newHelper = std::make_shared<AIHelper>();
+        addOrUpdateChatSession(userId, sessionId, newHelper);
+        updateLRUCache(userId, sessionId);
+        return newHelper;
+    }
 }
 
 void ChatServer::setThreadNum(int numThreads) {
@@ -198,9 +192,7 @@ void ChatServer::initializeSession() {
 }
 
 void ChatServer::updateLRUCache(int userId, const std::string& sessionId) {
-    {
-        std::lock_guard<std::mutex> lock(lruCacheMutex_);
-        
+    httpServer_.getLoop()->runInLoop([this, userId, sessionId]() {
         // 如果会话已在LRU缓存中，先移除旧条目
         auto it = lruCacheMap_.find(sessionId);
         if (it != lruCacheMap_.end()) {
@@ -211,10 +203,10 @@ void ChatServer::updateLRUCache(int userId, const std::string& sessionId) {
         // 将新会话添加到LRU链表头部（表示最近使用）
         lruCacheList_.emplace_front(userId, sessionId);
         lruCacheMap_[sessionId] = lruCacheList_.begin();
-    }
-    
-    // 检查并执行LRU淘汰策略
-    evictLRUCacheIfNeeded();
+        
+        // 检查并执行LRU淘汰策略
+        evictLRUCacheIfNeeded();
+    });
 }
 
 void ChatServer::evictLRUCacheIfNeeded() {
@@ -229,15 +221,12 @@ void ChatServer::evictLRUCacheIfNeeded() {
         lruCacheList_.pop_back();
         
         // 从内存中的聊天信息里移除该会话
-        {
-            std::lock_guard<std::mutex> lock(mutexForChatInformation);
-            auto userIt = chatInformation.find(userId);
-            if (userIt != chatInformation.end()) {
-                userIt->second.erase(sessionId);
-                // 如果该用户的所有会话都被移除，则清理用户条目
-                if (userIt->second.empty()) {
-                    chatInformation.erase(userIt);
-                }
+        auto userIt = chatInformation.find(userId);
+        if (userIt != chatInformation.end()) {
+            userIt->second.erase(sessionId);
+            // 如果该用户的所有会话都被移除，则清理用户条目
+            if (userIt->second.empty()) {
+                chatInformation.erase(userIt);
             }
         }
         
@@ -263,31 +252,22 @@ void ChatServer::packageResp(const std::string& version, http::HttpResponse::Htt
 	resp->setBody(body);
 }
 
-void ChatServer::addSSEConnection(const std::string& sessionId, const muduo::net::TcpConnectionPtr& conn)
-{
-    std::unique_lock<std::shared_timed_mutex> lock(sseMutex_);
-    sseConnections_[sessionId] = conn;
+void ChatServer::addSSEConnection(const std::string& sessionId, const muduo::net::TcpConnectionPtr& conn) {
+    httpServer_.getLoop()->runInLoop([this, sessionId, conn]() {
+        sseConnections_[sessionId] = conn;
+    });
 }
 
-void ChatServer::removeSSEConnection(const std::string& sessionId)
-{
-    std::unique_lock<std::shared_timed_mutex> lock(sseMutex_);
-    sseConnections_.erase(sessionId);
+void ChatServer::removeSSEConnection(const std::string& sessionId) {
+    httpServer_.getLoop()->runInLoop([this, sessionId]() {
+        sseConnections_.erase(sessionId);
+    });
 }
 
-void ChatServer::sendSSEData(const std::string& sessionId, const std::string& data, const std::string& eventType)
-{
-    muduo::net::TcpConnectionPtr conn;
-    {
-        std::shared_lock<std::shared_timed_mutex> lock(sseMutex_);
+void ChatServer::sendSSEData(const std::string& sessionId, const std::string& data, const std::string& eventType) {
+    httpServer_.getLoop()->runInLoop([this, sessionId, data, eventType]() {
         auto it = sseConnections_.find(sessionId);
-        if (it != sseConnections_.end()) {
-            conn = it->second;
-        }
-    }
-
-    if (conn && conn->connected()) {
-        conn->getLoop()->runInLoop([conn, data, eventType]() {
+        if (it != sseConnections_.end() && it->second && it->second->connected()) {
             std::ostringstream oss;
             oss << "event: " << eventType << "\n";
             
@@ -299,7 +279,166 @@ void ChatServer::sendSSEData(const std::string& sessionId, const std::string& da
                 oss << "data: " << data << "\n\n";
             }
             
-            conn->send(oss.str());
-        });
-    }
+            it->second->send(oss.str());
+        }
+    });
+}
+
+void ChatServer::addUser(int userId) {
+    httpServer_.getLoop()->runInLoop([this, userId]() {
+        onlineUsers_[userId] = true;
+    });
+}
+
+void ChatServer::removeUser(int userId) {
+    httpServer_.getLoop()->runInLoop([this, userId]() {
+        onlineUsers_.erase(userId);
+    });
+}
+
+bool ChatServer::isUserOnline(int userId) const {
+    // 使用 promise/future 机制在 IO 线程中获取结果
+    std::promise<bool> prom;
+    auto fut = prom.get_future();
+    
+    httpServer_.getLoop()->runInLoop([this, userId, &prom]() {
+        auto it = onlineUsers_.find(userId);
+        prom.set_value(it != onlineUsers_.end() && it->second);
+    });
+    
+    fut.wait();
+    return fut.get();
+}
+
+void ChatServer::addSessionId(int userId, const std::string& sessionId) {
+    httpServer_.getLoop()->runInLoop([this, userId, sessionId]() {
+        auto& sessionList = sessionsIdsMap[userId];
+        if (std::find(sessionList.begin(), sessionList.end(), sessionId) == sessionList.end()) {
+            sessionList.push_back(sessionId);
+        }
+    });
+}
+
+void ChatServer::removeSessionId(int userId, const std::string& sessionId) {
+    httpServer_.getLoop()->runInLoop([this, userId, sessionId]() {
+        auto userIt = sessionsIdsMap.find(userId);
+        if (userIt != sessionsIdsMap.end()) {
+            auto& sessionList = userIt->second;
+            sessionList.erase(
+                std::remove(sessionList.begin(), sessionList.end(), sessionId),
+                sessionList.end()
+            );
+            if (sessionList.empty()) {
+                sessionsIdsMap.erase(userIt);
+            }
+        }
+    });
+}
+
+std::vector<std::string> ChatServer::getSessionIds(int userId) const {
+    std::promise<std::vector<std::string>> prom;
+    auto fut = prom.get_future();
+    
+    httpServer_.getLoop()->runInLoop([this, userId, &prom]() {
+        auto it = sessionsIdsMap.find(userId);
+        if (it != sessionsIdsMap.end()) {
+            prom.set_value(it->second);
+        } else {
+            prom.set_value(std::vector<std::string>());
+        }
+    });
+    
+    fut.wait();
+    return fut.get();
+}
+
+void ChatServer::addOrUpdateChatSession(int userId, const std::string& sessionId, std::shared_ptr<AIHelper> helper) {
+    httpServer_.getLoop()->runInLoop([this, userId, sessionId, helper]() {
+        chatInformation[userId][sessionId] = helper;
+    });
+}
+
+std::shared_ptr<AIHelper> ChatServer::getChatSession(int userId, const std::string& sessionId) {
+    std::promise<std::shared_ptr<AIHelper>> prom;
+    auto fut = prom.get_future();
+    
+    httpServer_.getLoop()->runInLoop([this, userId, sessionId, &prom]() {
+        auto userIt = chatInformation.find(userId);
+        if (userIt != chatInformation.end()) {
+            auto sessionIt = userIt->second.find(sessionId);
+            if (sessionIt != userIt->second.end()) {
+                prom.set_value(sessionIt->second);
+                return;
+            }
+        }
+        prom.set_value(nullptr);
+    });
+    
+    fut.wait();
+    return fut.get();
+}
+
+void ChatServer::removeChatSession(int userId, const std::string& sessionId) {
+    httpServer_.getLoop()->runInLoop([this, userId, sessionId]() {
+        auto userIt = chatInformation.find(userId);
+        if (userIt != chatInformation.end()) {
+            userIt->second.erase(sessionId);
+            if (userIt->second.empty()) {
+                chatInformation.erase(userIt);
+            }
+        }
+    });
+}
+
+void ChatServer::setChatResult(const std::string& sessionId, const std::string& result) {
+    httpServer_.getLoop()->runInLoop([this, sessionId, result]() {
+        chatResults[sessionId] = result;
+        
+        // AI处理完成，发送结果到对应的SSE连接
+        auto it = sseConnections_.find(sessionId);
+        if (it != sseConnections_.end() && it->second && it->second->connected()) {
+            // 发送结果事件
+            std::ostringstream resultData;
+            resultData << "event: result\n";
+            
+            json j;
+            j["result"] = result; 
+            resultData << "data: " << j.dump() << "\n\n";
+            
+            it->second->send(resultData.str());
+            
+            // 发送结束事件
+            std::ostringstream endData;
+            endData << "event: end\n";
+            endData << "data: {\"message\": \"AI processing completed\"}\n\n";
+            
+            it->second->send(endData.str());
+        }
+        
+        // 移除聊天结果，释放内存
+        chatResults.erase(sessionId);
+    });
+}
+
+std::string ChatServer::getChatResult(const std::string& sessionId) {
+    std::promise<std::string> prom;
+    auto fut = prom.get_future();
+    
+    httpServer_.getLoop()->runInLoop([this, sessionId, &prom]() {
+        auto it = chatResults.find(sessionId);
+        if (it != chatResults.end()) {
+            prom.set_value(it->second);
+        } else {
+            prom.set_value("");
+        }
+    });
+    
+    fut.wait();
+    return fut.get();
+}
+
+void ChatServer::removeChatResult(const std::string& sessionId) {
+    httpServer_.getLoop()->runInLoop([this, sessionId]() {
+        chatResults.erase(sessionId);
+    });
 }
