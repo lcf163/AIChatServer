@@ -81,14 +81,78 @@ void AIHelper::setStrategy(std::shared_ptr<AIStrategy> strat) {
     strategy = strat;
 }
 
+// 根据token数量截断消息
+std::string AIHelper::truncateMessageByTokens(const std::string& message) {
+    // 获取配置中的最大token数
+    const auto& limitsConfig = AIConfig::getInstance().getLimitsConfig();
+    int maxTokens = limitsConfig.maxTokensPerMessage;
+    
+    // 如果maxTokens <= 0，表示不限制
+    if (maxTokens <= 0) {
+        return message;
+    }
+    
+    // 计算当前消息的token数 (根据中英文字符计算)
+    int currentTokens = calculateTokens(message);
+    
+    // 如果当前token数未超过限制，直接返回原消息
+    if (currentTokens <= maxTokens) {
+        return message;
+    }
+    
+    // 截断消息以满足token限制
+    // 简单按比例截断，实际应用中可能需要更复杂的逻辑
+    double ratio = (double)maxTokens / currentTokens;
+    size_t newLength = (size_t)(message.length() * ratio);
+    
+    // 确保至少有一些内容
+    if (newLength < 10) {
+        newLength = 10;
+    }
+    
+    LOG_INFO << "Truncating message from " << currentTokens << " tokens to limit of " << maxTokens << " tokens";
+    
+    // 返回截断后的消息，并添加更友好的提示
+    return message.substr(0, newLength) + "... [消息过长，已被截断]";
+}
+
+int AIHelper::calculateTokens(const std::string& text) {
+    int asciiCount = 0;
+    int nonAsciiTokens = 0;
+    
+    for (size_t i = 0; i < text.length();) {
+        if ((text[i] & 0x80) != 0 && (text[i] & 0xE0) == 0xE0) {
+            // 中文字符 (UTF-8编码，3字节)
+            // 中文按1字符≈1 Token计算
+            nonAsciiTokens += 1;
+            i += 3;
+        } else {
+            // 英文字符或其他ASCII字符
+            // 英文按4字符≈1 Token计算
+            asciiCount++;
+            i += 1;
+        }
+    }
+    
+    // 总token数 = 中文字符数 + (英文字符数+3)/4 (向上取整)
+    return nonAsciiTokens + (asciiCount + 3) / 4;
+}
+
 // 添加一条用户消息
 void AIHelper::addMessage(int userId, const std::string& userName, bool is_user,const std::string& userInput, std::string sessionId) {
     auto now = std::chrono::system_clock::now();
     auto duration = now.time_since_epoch();
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
-    messages.push_back({ userInput,ms });
+    
+    // 对用户输入进行token限制检查和截断
+    std::string processedInput = userInput;
+    if (is_user) {  // 只对用户消息进行截断处理
+        processedInput = truncateMessageByTokens(userInput);
+    }
+    
+    messages.push_back({ processedInput, ms });
     //消息队列异步入库
-    pushMessageToMysql(userId, userName, is_user, userInput, ms, sessionId);
+    pushMessageToMysql(userId, userName, is_user, processedInput, ms, sessionId);
 }
 
 void AIHelper::restoreMessage(const std::string& userInput,long long ms) {

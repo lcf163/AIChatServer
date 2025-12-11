@@ -9,6 +9,7 @@ AIConfig::AIConfig() : isLoaded_(false) {
     // 设置默认限制配置
     limitsConfig_.maxHistoryRounds = 10;
     limitsConfig_.maxActiveSessions = 1000;
+    limitsConfig_.maxTokensPerMessage = 500;  // 默认每条消息最大500个token
     
     // 工具已经在AIToolRegistry构造函数中注册
 }
@@ -152,6 +153,9 @@ bool AIConfig::loadFromFile(const std::string& path) {
             }
             if (limits.contains("max_active_sessions") && limits["max_active_sessions"].is_number_integer()) {
                 limitsConfig_.maxActiveSessions = limits["max_active_sessions"];
+            }
+            if (limits.contains("max_tokens_per_message") && limits["max_tokens_per_message"].is_number_integer()) {
+                limitsConfig_.maxTokensPerMessage = limits["max_tokens_per_message"];
             }
         }
 

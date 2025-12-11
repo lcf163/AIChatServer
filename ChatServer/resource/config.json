@@ -42,11 +42,12 @@
     "aliyun_mcp": {
       "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
       "model_name": "qwen-plus"
-    },
-    "limits": {
-      "max_history_rounds": 10,
-      "max_active_sessions": 1000
     }
+  },
+  "limits": {
+    "max_active_sessions": 1000,
+    "max_history_rounds": 10,
+    "max_tokens_per_message": 1000
   },
   "speech_service": {
     "provider": "baidu"

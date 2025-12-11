@@ -30,8 +30,9 @@ enum class SpeechServiceProvider {
 
 // 添加限制配置结构体
 struct LimitsConfig {
-    int maxHistoryRounds;
     int maxActiveSessions;
+    int maxHistoryRounds;
+    int maxTokensPerMessage;  // 每条消息的最大token数
 };
 
 struct AITool {

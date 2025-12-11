@@ -50,6 +50,12 @@ private:
     // 线程池做异步 mysql 更新操作
     void pushMessageToMysql(int userId, const std::string& userName, bool is_user, const std::string& userInput, long long ms,std::string sessionId);
 
+    // 根据token数量截断消息
+    std::string truncateMessageByTokens(const std::string& message);
+    
+    // 计算文本的token数量
+    int calculateTokens(const std::string& text);
+
     // 执行 curl 请求，返回原始 JSON
     json executeCurl(const json& payload, StreamCallback callback = nullptr);
     // curl 回调函数，把返回的数据写到 string buffer
