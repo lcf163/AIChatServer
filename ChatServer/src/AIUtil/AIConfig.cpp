@@ -6,6 +6,10 @@ AIConfig::AIConfig() : isLoaded_(false) {
     // 设置默认日志级别为WARN
     logConfig_.level = LogLevel::WARN;
     
+    // 设置默认限制配置
+    limitsConfig_.maxHistoryRounds = 10;
+    limitsConfig_.maxActiveSessions = 1000;
+    
     // 工具已经在AIToolRegistry构造函数中注册
 }
 
@@ -140,6 +144,17 @@ bool AIConfig::loadFromFile(const std::string& path) {
             }
         }
         
+        // 加载限制配置
+        if (config.contains("limits")) {
+            auto limits = config["limits"];
+            if (limits.contains("max_history_rounds") && limits["max_history_rounds"].is_number_integer()) {
+                limitsConfig_.maxHistoryRounds = limits["max_history_rounds"];
+            }
+            if (limits.contains("max_active_sessions") && limits["max_active_sessions"].is_number_integer()) {
+                limitsConfig_.maxActiveSessions = limits["max_active_sessions"];
+            }
+        }
+
         // 加载日志配置
         if (config.contains("log")) {
             auto logConfig = config["log"];

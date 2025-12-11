@@ -114,8 +114,6 @@ private:
 	
 	void loadSessionsFromDatabase();
 
-	// 按需加载会话消息 - 声明保留，但实现也应改为无锁
-	std::shared_ptr<AIHelper> loadSessionOnDemand(int userId, const std::string& sessionId);
 
 	void packageResp(const std::string& version, http::HttpResponse::HttpStatusCode statusCode,
 		const std::string& statusMsg, bool close, const std::string& contentType,
@@ -146,5 +144,7 @@ private:
 	// LRU Cache相关成员 (无锁实现)
 	std::list<std::pair<int, std::string>> lruCacheList_;
 	std::unordered_map<std::string, std::list<std::pair<int, std::string>>::iterator> lruCacheMap_;
-	static const size_t MAX_ACTIVE_SESSIONS = 1000;
+	
+	// 最大活跃会话数，从配置文件加载
+	size_t maxActiveSessions_;
 };

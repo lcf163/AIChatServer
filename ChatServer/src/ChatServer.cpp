@@ -105,56 +105,6 @@ void ChatServer::loadSessionsFromDatabase() {
     }
 }
 
-// 按需加载会话消息
-std::shared_ptr<AIHelper> ChatServer::loadSessionOnDemand(int userId, const std::string& sessionId) {
-    // 先尝试从内存中获取
-    auto helper = getChatSession(userId, sessionId);
-    if (helper) {
-        // 如果已存在，更新LRU缓存并返回
-        updateLRUCache(userId, sessionId);
-        return helper;
-    }
-    
-    // 从数据库加载会话消息
-    try {
-        std::string sql = "SELECT is_user, content, ts FROM chat_message WHERE user_id = ? AND session_id = ? ORDER BY ts ASC, id ASC";
-        std::unique_ptr<sql::ResultSet> result(mysqlUtil_.executeQuery(sql, std::to_string(userId), sessionId));
-
-        // 创建AIHelper实例
-        auto newHelper = std::make_shared<AIHelper>();
-        int messageCount = 0;
-
-        if (result) {
-            // 恢复历史消息
-            while (result->next()) {
-                std::string content = result->getString("content");
-                long long ts = result->getInt64("ts");
-                newHelper->restoreMessage(content, ts);
-                messageCount++;
-            }
-        }
-            
-        // 添加到内存
-        addOrUpdateChatSession(userId, sessionId, newHelper);
-        
-        // 更新会话列表
-        addSessionId(userId, sessionId);
-        
-        // 加载成功后，更新LRU缓存
-        updateLRUCache(userId, sessionId);
-        
-        LOG_INFO << "Loaded " << messageCount << " messages for session " << sessionId;
-        return newHelper;
-        
-    } catch (const std::exception& e) {
-        LOG_ERROR << "Error loading session messages from database: " << e.what();
-        // 出错时仍创建一个空的AIHelper实例
-        auto newHelper = std::make_shared<AIHelper>();
-        addOrUpdateChatSession(userId, sessionId, newHelper);
-        updateLRUCache(userId, sessionId);
-        return newHelper;
-    }
-}
 
 void ChatServer::setThreadNum(int numThreads) {
     httpServer_.setThreadNum(numThreads);
@@ -210,6 +160,10 @@ void ChatServer::updateLRUCache(int userId, const std::string& sessionId) {
 }
 
 void ChatServer::evictLRUCacheIfNeeded() {
+    // 从配置中获取最大活跃会话数
+    const auto& limitsConfig = AIConfig::getInstance().getLimitsConfig();
+    const size_t MAX_ACTIVE_SESSIONS = limitsConfig.maxActiveSessions;
+    
     // 当活跃会话数超过最大限制时，开始淘汰
     while (lruCacheList_.size() > MAX_ACTIVE_SESSIONS) {
         // 获取并移除LRU链表尾部元素（最久未使用的会话）

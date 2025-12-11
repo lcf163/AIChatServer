@@ -28,6 +28,12 @@ enum class SpeechServiceProvider {
     UNKNOWN
 };
 
+// 添加限制配置结构体
+struct LimitsConfig {
+    int maxHistoryRounds;
+    int maxActiveSessions;
+};
+
 struct AITool {
     std::string name;
     std::unordered_map<std::string, std::string> params;
@@ -122,6 +128,7 @@ public:
     const RabbitMQConfig& getRabbitMQConfig() const { return mqConfig_; }
     const ApiKeysConfig& getApiKeysConfig() const { return apiKeysConfig_; }
     const ModelConfig& getModelConfig() const { return modelConfig_; }
+    const LimitsConfig& getLimitsConfig() const { return limitsConfig_; }
     SpeechServiceProvider getSpeechServiceProvider() const { return speechServiceProvider_; }
     const AIToolRegistry& getToolRegistry() const { return toolRegistry_; }
 
@@ -142,6 +149,7 @@ private:
     RabbitMQConfig mqConfig_;
     ApiKeysConfig apiKeysConfig_;
     ModelConfig modelConfig_;
+    LimitsConfig limitsConfig_;
     SpeechServiceProvider speechServiceProvider_;
 
     std::string buildToolList() const;
