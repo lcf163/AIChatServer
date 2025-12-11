@@ -1,14 +1,9 @@
 #pragma once
 
-#include <atomic>
 #include <memory>
-#include <tuple>
 #include <unordered_map>
 #include <mutex>
 #include <shared_mutex>
-#include <cstdlib>
-#include <ctime>
-#include <iostream>
 #include <string>
 #include <vector>
 
@@ -114,7 +109,6 @@ private:
 	
 	void loadSessionsFromDatabase();
 
-
 	void packageResp(const std::string& version, http::HttpResponse::HttpStatusCode statusCode,
 		const std::string& statusMsg, bool close, const std::string& contentType,
 		int contentLen, const std::string& body, http::HttpResponse* resp);
@@ -144,7 +138,4 @@ private:
 	// LRU Cache相关成员 (无锁实现)
 	std::list<std::pair<int, std::string>> lruCacheList_;
 	std::unordered_map<std::string, std::list<std::pair<int, std::string>>::iterator> lruCacheMap_;
-	
-	// 最大活跃会话数，从配置文件加载
-	size_t maxActiveSessions_;
 };

@@ -155,10 +155,6 @@ void AIHelper::addMessage(int userId, const std::string& userName, bool is_user,
     pushMessageToMysql(userId, userName, is_user, processedInput, ms, sessionId);
 }
 
-void AIHelper::restoreMessage(const std::string& userInput,long long ms) {
-    messages.push_back({ userInput,ms });
-}
-
 // 发送聊天消息
 std::string AIHelper::chat(int userId,std::string userName, std::string sessionId, std::string userQuestion, std::string modelType) {
     return chatImpl(userId, userName, sessionId, userQuestion, modelType, nullptr);
@@ -324,9 +320,6 @@ json AIHelper::request(const json& payload) {
     return executeCurl(payload);
 }
 
-std::vector<std::pair<std::string, long long>> AIHelper::GetMessages() {
-    return this->messages;
-}
 
 // 执行 curl 请求
 json AIHelper::executeCurl(const json& payload, StreamCallback callback) {
@@ -360,6 +353,8 @@ json AIHelper::executeCurl(const json& payload, StreamCallback callback) {
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payloadStr.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ctx);
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 120L); 
 
     CURLcode res = curl_easy_perform(curl);
     curl_slist_free_all(headers);
@@ -414,23 +409,6 @@ size_t AIHelper::WriteCallback(void* contents, size_t size, size_t nmemb, void* 
         LOG_INFO << "Full AI response completed. ";
     }
     return totalSize;
-}
-
-std::string AIHelper::escapeString(const std::string& input) {
-    std::string output;
-    output.reserve(input.size() * 2);
-    for (char c : input) {
-        switch (c) {
-            case '\\': output += "\\\\"; break;
-            case '\'': output += "\\\'"; break;
-            case '\"': output += "\\\""; break;
-            case '\n': output += "\\n"; break;
-            case '\r': output += "\\r"; break;
-            case '\t': output += "\\t"; break;
-            default:   output += c; break;
-        }
-    }
-    return output;
 }
 
 void AIHelper::pushMessageToMysql(int userId, const std::string& userName, bool is_user, const std::string& userInput, long long ms, std::string sessionId) {

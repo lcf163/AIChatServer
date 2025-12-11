@@ -30,9 +30,6 @@ public:
 
     // 添加一条消息
     void addMessage(int userId, const std::string& userName, bool is_user, const std::string& userInput, std::string sessionId);
-    // 恢复一条消息
-    void restoreMessage(const std::string& userInput, long long ms);
-
     // 发送聊天消息，返回AI的响应内容
     // messages: [{"role":"system","content":"..."}, {"role":"user","content":"..."}]
     std::string chat(int userId, std::string userName, std::string sessionId, std::string userQuestion, std::string modelType);
@@ -40,13 +37,10 @@ public:
     // 异步发送聊天消息，支持流式回调
     std::future<std::string> chatAsync(std::shared_ptr<ThreadPool> pool, int userId, std::string userName, std::string sessionId, std::string userQuestion, std::string modelType, StreamCallback callback = nullptr);
 
-    // 可选：发送自定义请求体
+    // 发送自定义请求体
     json request(const json& payload);
 
-    std::vector<std::pair<std::string, long long>> GetMessages();
-
 private:
-    std::string escapeString(const std::string& input);
     // 线程池做异步 mysql 更新操作
     void pushMessageToMysql(int userId, const std::string& userName, bool is_user, const std::string& userInput, long long ms,std::string sessionId);
 
